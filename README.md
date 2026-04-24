@@ -2,6 +2,14 @@
 
 ArchitectSim Web is a stateless, browser-based system design simulator for modeling request flow through an architecture diagram. It combines a node-based canvas with a lightweight traffic engine so you can sketch a topology, simulate live traffic, and visually spot bottlenecks before thinking about deeper backend infrastructure or persistence.
 
+## Live Demo
+
+The project is deployed for easier access here:
+
+**Live App:** https://design-simulator-pied.vercel.app/
+
+If you just want to explore the simulator, use the deployed app instead of setting up the project locally.
+
 ## Vision
 
 The goal of the project is to make system design more interactive and easier to reason about:
@@ -84,6 +92,10 @@ This project is intentionally stateless. A design lives entirely in the browser 
 - Lucide React
 
 ## How to Run
+
+If you want to use the hosted version, open:
+
+`https://design-simulator-pied.vercel.app/`
 
 ### 1. Install dependencies
 
