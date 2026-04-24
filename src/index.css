@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: "Space Grotesk", "Bahnschrift", "Trebuchet MS", sans-serif;
+  --bg-0: #071218;
+  --bg-1: #0d1e26;
+  --bg-2: #13303b;
+  --panel: rgba(15, 35, 43, 0.82);
+  --panel-strong: rgba(23, 51, 61, 0.96);
+  --panel-soft: rgba(11, 26, 33, 0.78);
+  --line: rgba(186, 219, 213, 0.14);
+  --line-strong: rgba(186, 219, 213, 0.26);
+  --text: #ecf8f4;
+  --muted: #9db8b2;
+  --cyan: #5de2e7;
+  --amber: #ffb44f;
+  --danger: #ff7557;
+  --success: #67d77a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(93, 226, 231, 0.15), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(255, 180, 79, 0.16), transparent 35%),
+    linear-gradient(145deg, var(--bg-0), var(--bg-1) 52%, var(--bg-2));
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black, transparent 88%);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.glass-panel {
+  background: linear-gradient(180deg, rgba(24, 55, 66, 0.84), rgba(10, 24, 30, 0.88));
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 80px rgba(5, 13, 18, 0.45);
+  backdrop-filter: blur(18px);
+}
+
+.panel-edge {
+  position: relative;
+}
+
+.panel-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(93, 226, 231, 0.14), transparent 40%, rgba(255, 180, 79, 0.14));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.react-flow {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(93, 226, 231, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(5, 15, 20, 0.18), transparent 60%);
+}
+
+.react-flow__controls,
+.react-flow__minimap {
+  border: 1px solid var(--line) !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+  background: rgba(8, 20, 26, 0.88) !important;
+  box-shadow: 0 18px 40px rgba(4, 11, 15, 0.35) !important;
+}
+
+.react-flow__controls-button {
+  background: rgba(8, 20, 26, 0.94) !important;
+  border-bottom: 1px solid rgba(186, 219, 213, 0.08) !important;
+  color: var(--text) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(16, 40, 48, 0.96) !important;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.react-flow__background path {
+  stroke: rgba(186, 219, 213, 0.08);
+}
+
+.sim-slider {
+  accent-color: var(--amber);
+}
+
+.soft-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(186, 219, 213, 0.28) transparent;
+}
+
+.soft-scrollbar::-webkit-scrollbar {
+  width: 9px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(186, 219, 213, 0.22);
+  border-radius: 999px;
+}
