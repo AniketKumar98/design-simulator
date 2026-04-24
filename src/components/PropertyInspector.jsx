@@ -1,5 +1,6 @@
 import { ArrowRight, Copy, Trash2 } from 'lucide-react';
 import { COMPONENT_REGISTRY, NODE_KINDS } from '../constants';
+import CollapsibleSection from './CollapsibleSection';
 
 function formatCapacity(capacity) {
   return Number.isFinite(capacity) ? `${capacity} req/s` : 'Unlimited';
@@ -49,7 +50,7 @@ function NodeEditor({
 
   return (
     <>
-      <div className="mt-2 flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl text-white">{registry.label}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">{registry.description}</p>
@@ -87,13 +88,13 @@ function NodeEditor({
       </label>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-[22px] border border-white/10 bg-slate-950/35 p-4">
+        <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
           <p className="text-sm text-slate-300">Current Load</p>
           <p className="mt-2 font-display text-3xl text-white">
             {Math.round(simulation?.loadRps ?? 0)} req/s
           </p>
         </div>
-        <div className="rounded-[22px] border border-white/10 bg-slate-950/35 p-4">
+        <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
           <p className="text-sm text-slate-300">Capacity</p>
           <p className="mt-2 font-display text-3xl text-white">
             {formatCapacity(simulation?.capacity ?? Number.POSITIVE_INFINITY)}
@@ -102,7 +103,7 @@ function NodeEditor({
       </div>
 
       {node.data.kind === NODE_KINDS.LOAD_BALANCER ? (
-        <div className="mt-3 rounded-[22px] border border-white/10 bg-slate-950/35 p-4">
+        <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 p-4">
           <p className="text-sm text-slate-300">Connected Targets</p>
           <p className="mt-2 font-display text-3xl text-white">{node.data.outgoingCount ?? 0}</p>
         </div>
@@ -153,27 +154,25 @@ function EdgeEditor({ edge, onDeleteSelection }) {
 
   return (
     <>
-      <div className="mt-2 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl text-white">Connection</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Inspect the selected path and remove it if you want to rewire the request flow.
-          </p>
-        </div>
+      <div>
+        <h2 className="font-display text-2xl text-white">Connection</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Inspect the selected path and remove it if you want to rewire the request flow.
+        </p>
       </div>
 
-      <div className="mt-5 rounded-[22px] border border-white/10 bg-slate-950/35 p-4">
+      <div className="mt-5 rounded-[18px] border border-white/10 bg-white/5 p-4">
         <div className="flex items-center gap-2 font-display text-lg text-white">
           <span>{edge.data?.sourceLabel ?? edge.source}</span>
           <ArrowRight size={16} className="text-cyan-200" />
           <span>{edge.data?.targetLabel ?? edge.target}</span>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+          <div className="rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Live Flow</div>
             <div className="mt-1 font-display text-2xl text-white">{Math.round(rps)} req/s</div>
           </div>
-          <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+          <div className="rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Intensity</div>
             <div className="mt-1 font-display text-2xl text-white">
               {Math.round(trafficIntensity * 100)}%
@@ -208,74 +207,83 @@ export default function PropertyInspector({
   selectedEdgeId,
   selectedNodeId,
 }) {
+  const activeMeta = node
+    ? COMPONENT_REGISTRY[node.data.kind].shortLabel
+    : edge
+      ? 'link'
+      : 'nothing selected';
+
   return (
     <section className="glass-panel panel-edge rounded-[28px] p-5">
       <p className="font-mono text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">
         Inspector
       </p>
 
-      {node ? (
-        <NodeEditor
-          node={node}
-          onDeleteSelection={onDeleteSelection}
-          onDuplicateNode={onDuplicateNode}
-          onFieldChange={onFieldChange}
-          onLabelChange={onLabelChange}
-        />
-      ) : edge ? (
-        <EdgeEditor edge={edge} onDeleteSelection={onDeleteSelection} />
-      ) : (
-        <>
-          <h2 className="mt-2 font-display text-2xl text-white">Select a node or connection</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-300">
-            Click components to tune latency, capacity, and failure settings. Click connections to
-            inspect or remove them.
-          </p>
-        </>
-      )}
-
-      <div className="mt-6 border-t border-white/10 pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">
-              On Board
-            </p>
-            <h3 className="mt-2 font-display text-xl text-white">Topology inventory</h3>
-          </div>
-          <div className="rounded-full border border-white/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300">
-            {nodes.length} nodes / {edges.length} links
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          {nodes.length > 0 ? (
-            nodes.map((inventoryNode) => {
-              const registry = COMPONENT_REGISTRY[inventoryNode.data.kind];
-
-              return (
-                <InventoryButton
-                  key={inventoryNode.id}
-                  active={selectedNodeId === inventoryNode.id}
-                  title={inventoryNode.data.label}
-                  description={registry.label}
-                  meta={inventoryNode.data.simulation?.isBottleneck ? 'hot' : registry.shortLabel}
-                  onClick={() => onSelectNode(inventoryNode.id)}
-                />
-              );
-            })
+      <div className="mt-5 space-y-4">
+        <CollapsibleSection
+          title="Selection Details"
+          subtitle="Edit the currently selected node or connection."
+          meta={activeMeta}
+        >
+          {node ? (
+            <NodeEditor
+              node={node}
+              onDeleteSelection={onDeleteSelection}
+              onDuplicateNode={onDuplicateNode}
+              onFieldChange={onFieldChange}
+              onLabelChange={onLabelChange}
+            />
+          ) : edge ? (
+            <EdgeEditor edge={edge} onDeleteSelection={onDeleteSelection} />
           ) : (
-            <div className="rounded-[18px] border border-white/10 bg-slate-950/35 px-3 py-3 text-sm text-slate-400">
-              The board is empty. Use the quick-start templates or the Add buttons from the left
-              panel.
+            <div>
+              <h2 className="font-display text-2xl text-white">Select a node or connection</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                Click components to tune latency, capacity, and failure settings. Click links to
+                inspect or remove them.
+              </p>
             </div>
           )}
-        </div>
+        </CollapsibleSection>
 
-        <div className="mt-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">
-            Links
-          </p>
-          <div className="mt-3 space-y-2">
+        <CollapsibleSection
+          title="Nodes on Board"
+          subtitle="Jump to any component without hunting across the canvas."
+          meta={`${nodes.length} nodes`}
+          defaultOpen={false}
+        >
+          <div className="space-y-2">
+            {nodes.length > 0 ? (
+              nodes.map((inventoryNode) => {
+                const registry = COMPONENT_REGISTRY[inventoryNode.data.kind];
+
+                return (
+                  <InventoryButton
+                    key={inventoryNode.id}
+                    active={selectedNodeId === inventoryNode.id}
+                    title={inventoryNode.data.label}
+                    description={registry.label}
+                    meta={inventoryNode.data.simulation?.isBottleneck ? 'hot' : registry.shortLabel}
+                    onClick={() => onSelectNode(inventoryNode.id)}
+                  />
+                );
+              })
+            ) : (
+              <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-400">
+                The board is empty. Use the quick-start templates or the Add buttons from the left
+                panel.
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Links"
+          subtitle="Inspect or jump to the currently wired request paths."
+          meta={`${edges.length} links`}
+          defaultOpen={false}
+        >
+          <div className="space-y-2">
             {edges.length > 0 ? (
               edges.map((inventoryEdge) => (
                 <InventoryButton
@@ -288,13 +296,13 @@ export default function PropertyInspector({
                 />
               ))
             ) : (
-              <div className="rounded-[18px] border border-white/10 bg-slate-950/35 px-3 py-3 text-sm text-slate-400">
-                No links yet. Drag from a node’s right handle to another node’s left handle to
+              <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-400">
+                No links yet. Drag from a node's right handle to another node's left handle to
                 connect them.
               </div>
             )}
           </div>
-        </div>
+        </CollapsibleSection>
       </div>
     </section>
   );

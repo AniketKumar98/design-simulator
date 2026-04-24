@@ -450,14 +450,14 @@ function SimulatorWorkspace() {
 
   return (
     <div className="min-h-screen px-4 py-4 lg:px-6">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1800px] grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_380px]">
+      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1800px] grid-cols-1 gap-4 xl:items-start xl:grid-cols-[320px_minmax(0,1fr)_380px]">
         <ComponentPalette
           onAddComponent={handleAddComponent}
           onLoadStarter={handleLoadStarter}
         />
 
-        <main className="glass-panel panel-edge relative overflow-hidden rounded-[32px]">
-          <div className="absolute inset-x-0 top-0 z-10 flex flex-col gap-3 border-b border-white/8 bg-slate-950/40 px-5 py-4 backdrop-blur-sm md:flex-row md:items-end md:justify-between">
+        <main className="glass-panel panel-edge relative flex flex-col overflow-hidden rounded-[32px]">
+          <div className="shrink-0 border-b border-white/8 bg-slate-950/40 px-5 py-4 backdrop-blur-sm md:flex md:items-end md:justify-between md:gap-4">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">
                 ArchitectSim Web
@@ -470,7 +470,7 @@ function SimulatorWorkspace() {
                 request traffic through the design to expose bottlenecks.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-0 md:justify-end">
               <div className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100">
                 <Radar size={16} />
                 Stateless topology sharing via Base64 URL configs
@@ -487,7 +487,7 @@ function SimulatorWorkspace() {
           </div>
 
           <div
-            className="relative h-[72vh] min-h-[760px] w-full"
+            className="relative flex h-[72vh] min-h-[620px] w-full min-w-0 flex-col lg:min-h-[680px]"
             onDrop={(event) => {
               event.preventDefault();
 
@@ -518,93 +518,103 @@ function SimulatorWorkspace() {
               event.dataTransfer.dropEffect = 'move';
             }}
           >
-            <AnalyticsOverlay
-              analytics={simulation.analytics}
-              history={deferredHistory}
-              isRunning={isRunning}
-            />
+            <div className="relative min-h-0 flex-1">
+              {nodes.length === 0 ? (
+                <EmptyCanvasState
+                  onAddComponent={handleAddComponent}
+                  onLoadStarter={handleLoadStarter}
+                />
+              ) : null}
 
-            {nodes.length === 0 ? (
-              <EmptyCanvasState
-                onAddComponent={handleAddComponent}
-                onLoadStarter={handleLoadStarter}
-              />
-            ) : null}
-
-            <ReactFlow
-              fitView
-              nodes={displayNodes}
-              edges={displayEdges}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              onInit={setFlowInstance}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeClick={(_, node) => {
-                setSelectedNodeId(node.id);
-                setSelectedEdgeId(null);
-              }}
-              onEdgeClick={(_, edge) => {
-                setSelectedEdgeId(edge.id);
-                setSelectedNodeId(null);
-              }}
-              onPaneClick={() => {
-                setSelectedNodeId(null);
-                setSelectedEdgeId(null);
-              }}
-              onConnect={(connection) => {
-                if (!connection.source || !connection.target || connection.source === connection.target) {
-                  return;
-                }
-
-                setEdges((currentEdges) => {
-                  if (currentEdges.some((edge) => (
-                    edge.source === connection.source && edge.target === connection.target
-                  ))) {
-                    return currentEdges;
+              <ReactFlow
+                fitView
+                nodes={displayNodes}
+                edges={displayEdges}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                onInit={setFlowInstance}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={(_, node) => {
+                  setSelectedNodeId(node.id);
+                  setSelectedEdgeId(null);
+                }}
+                onEdgeClick={(_, edge) => {
+                  setSelectedEdgeId(edge.id);
+                  setSelectedNodeId(null);
+                }}
+                onPaneClick={() => {
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                }}
+                onConnect={(connection) => {
+                  if (!connection.source || !connection.target || connection.source === connection.target) {
+                    return;
                   }
 
-                  return addEdge(
-                    {
-                      ...connection,
-                      id: `edge-${connection.source}-${connection.target}-${Math.random().toString(36).slice(2, 7)}`,
-                      type: RF_EDGE_TYPE,
-                      markerEnd: {
-                        type: MarkerType.ArrowClosed,
-                        width: 18,
-                        height: 18,
-                        color: '#5de2e7',
+                  setEdges((currentEdges) => {
+                    if (currentEdges.some((edge) => (
+                      edge.source === connection.source && edge.target === connection.target
+                    ))) {
+                      return currentEdges;
+                    }
+
+                    return addEdge(
+                      {
+                        ...connection,
+                        id: `edge-${connection.source}-${connection.target}-${Math.random().toString(36).slice(2, 7)}`,
+                        type: RF_EDGE_TYPE,
+                        markerEnd: {
+                          type: MarkerType.ArrowClosed,
+                          width: 18,
+                          height: 18,
+                          color: '#5de2e7',
+                        },
                       },
-                    },
-                    currentEdges,
-                  );
-                });
-              }}
-              defaultEdgeOptions={{
-                type: RF_EDGE_TYPE,
-                markerEnd: {
-                  type: MarkerType.ArrowClosed,
-                  width: 18,
-                  height: 18,
-                  color: '#5de2e7',
-                },
-              }}
-              className="pt-[126px]"
+                      currentEdges,
+                    );
+                  });
+                }}
+                defaultEdgeOptions={{
+                  type: RF_EDGE_TYPE,
+                  markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    width: 18,
+                    height: 18,
+                    color: '#5de2e7',
+                  },
+                }}
+                className=""
+              >
+                <MiniMap
+                  pannable
+                  zoomable
+                  className="!bottom-4 !left-4 !h-[140px] !w-[220px]"
+                  nodeColor={getMiniMapColor}
+                  maskColor="rgba(6, 14, 18, 0.62)"
+                />
+                <Controls position="bottom-right" />
+                <Background gap={24} size={1.2} color="rgba(186, 219, 213, 0.12)" />
+              </ReactFlow>
+            </div>
+
+            <div
+              className={`px-4 transition-all duration-300 ${
+                isRunning
+                  ? 'border-t border-white/8 py-4'
+                  : 'max-h-0 overflow-hidden border-transparent py-0'
+              }`}
             >
-              <MiniMap
-                pannable
-                zoomable
-                className="!bottom-4 !left-4 !h-[140px] !w-[220px]"
-                nodeColor={getMiniMapColor}
-                maskColor="rgba(6, 14, 18, 0.62)"
+              <AnalyticsOverlay
+                analytics={simulation.analytics}
+                history={deferredHistory}
+                isRunning={isRunning}
               />
-              <Controls position="bottom-right" />
-              <Background gap={24} size={1.2} color="rgba(186, 219, 213, 0.12)" />
-            </ReactFlow>
+            </div>
           </div>
         </main>
 
-        <div className="grid gap-4">
+        <div className="soft-scrollbar grid gap-4 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
           <ControlPanel
             analytics={simulation.analytics}
             canDeleteSelection={Boolean(selectedNode || selectedEdge)}
