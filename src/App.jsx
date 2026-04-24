@@ -10,7 +10,7 @@ import {
   useEdgesState,
   useNodesState,
 } from '@xyflow/react';
-import { Link2, Radar, Sparkles } from 'lucide-react';
+import { Copy, Pause, Play, Radar } from 'lucide-react';
 import AnalyticsOverlay from './components/AnalyticsOverlay';
 import ComponentPalette from './components/ComponentPalette';
 import ControlPanel from './components/ControlPanel';
@@ -234,6 +234,14 @@ function SimulatorWorkspace() {
     window.setTimeout(() => {
       flowInstance.fitView({ duration: 550, padding: 0.18 });
     }, 0);
+  }
+
+  function handleFitView() {
+    if (!flowInstance) {
+      return;
+    }
+
+    flowInstance.fitView({ duration: 550, padding: 0.18 });
   }
 
   function applyGraph(nextGraph, options = {}) {
@@ -471,18 +479,30 @@ function SimulatorWorkspace() {
               </p>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-0 md:justify-end">
-              <div className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100">
+              <button
+                type="button"
+                onClick={handleCopyConfig}
+                className="flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/35 hover:bg-cyan-300/15"
+              >
+                <Copy size={16} />
+                {copyFeedback ? 'Config Copied' : 'Copy Config'}
+              </button>
+              <button
+                type="button"
+                onClick={handleFitView}
+                className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-200/35 hover:bg-amber-300/15"
+              >
                 <Radar size={16} />
-                Stateless topology sharing via Base64 URL configs
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-4 py-2 text-sm text-amber-100">
-                <Link2 size={16} />
-                Connect amber output to cyan input
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-                <Sparkles size={16} />
-                Delete or duplicate from the right panel
-              </div>
+                Fit View
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRunning((current) => !current)}
+                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+              >
+                {isRunning ? <Pause size={16} /> : <Play size={16} />}
+                {isRunning ? 'Stop Simulation' : 'Start Simulation'}
+              </button>
             </div>
           </div>
 
