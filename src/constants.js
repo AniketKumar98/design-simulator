@@ -20,6 +20,13 @@ export const TRAFFIC_PATTERN_OPTIONS = [
   { value: 'sinusoidal', label: 'Sinusoidal' },
 ];
 
+export const TRAFFIC_LIMITS = {
+  minRps: 100,
+  maxRps: 5_000_000_000,
+  defaultRps: 250_000,
+  presets: [1_000, 100_000, 10_000_000, 1_000_000_000, 5_000_000_000],
+};
+
 export const COMPONENT_REGISTRY = {
   [NODE_KINDS.CLIENT]: {
     label: 'Client / Ingress',
@@ -65,12 +72,12 @@ export const COMPONENT_REGISTRY = {
     accent: 'from-lime-300 via-emerald-300 to-cyan-300',
     defaults: {
       latencyMs: 42,
-      capacityRps: 140,
+      capacityRps: 180_000,
       failureRate: 2,
     },
     fields: [
       { key: 'latencyMs', label: 'Latency', type: 'number', unit: 'ms', min: 5, max: 400, step: 1 },
-      { key: 'capacityRps', label: 'Capacity', type: 'number', unit: 'req/s', min: 10, max: 900, step: 5 },
+      { key: 'capacityRps', label: 'Capacity', type: 'number', unit: 'req/s', min: 1_000, max: 5_000_000_000, step: 1_000 },
       { key: 'failureRate', label: 'Failure Rate', type: 'number', unit: '%', min: 0, max: 60, step: 1 },
     ],
   },
@@ -83,12 +90,12 @@ export const COMPONENT_REGISTRY = {
     defaults: {
       readLatencyMs: 18,
       writeLatencyMs: 34,
-      connectionLimit: 90,
+      connectionLimit: 300_000,
     },
     fields: [
       { key: 'readLatencyMs', label: 'Read Latency', type: 'number', unit: 'ms', min: 1, max: 250, step: 1 },
       { key: 'writeLatencyMs', label: 'Write Latency', type: 'number', unit: 'ms', min: 1, max: 250, step: 1 },
-      { key: 'connectionLimit', label: 'Connection Limit', type: 'number', unit: 'conn', min: 10, max: 600, step: 5 },
+      { key: 'connectionLimit', label: 'Connection Limit', type: 'number', unit: 'conn', min: 1_000, max: 1_000_000_000, step: 1_000 },
     ],
   },
   [NODE_KINDS.CACHE]: {
@@ -99,12 +106,12 @@ export const COMPONENT_REGISTRY = {
     accent: 'from-cyan-300 via-teal-300 to-lime-300',
     defaults: {
       latencyMs: 8,
-      capacityRps: 260,
+      capacityRps: 350_000,
       hitRate: 78,
     },
     fields: [
       { key: 'latencyMs', label: 'Latency', type: 'number', unit: 'ms', min: 1, max: 150, step: 1 },
-      { key: 'capacityRps', label: 'Capacity', type: 'number', unit: 'req/s', min: 10, max: 1000, step: 10 },
+      { key: 'capacityRps', label: 'Capacity', type: 'number', unit: 'req/s', min: 1_000, max: 5_000_000_000, step: 1_000 },
       { key: 'hitRate', label: 'Hit Rate', type: 'number', unit: '%', min: 10, max: 99, step: 1 },
     ],
   },
@@ -380,7 +387,7 @@ export function getNodeCapacity(node) {
     case NODE_KINDS.CACHE:
       return config.capacityRps;
     case NODE_KINDS.LOAD_BALANCER:
-      return 500;
+      return Number.POSITIVE_INFINITY;
     default:
       return Number.POSITIVE_INFINITY;
   }

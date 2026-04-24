@@ -8,10 +8,32 @@ import {
   RotateCcw,
   Trash2,
 } from 'lucide-react';
+import { TRAFFIC_LIMITS } from '../constants';
+import { formatCompactNumber, formatRps } from '../lib/format';
 import CollapsibleSection from './CollapsibleSection';
 
-function formatNumber(value) {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
+const LOG_MIN = Math.log10(TRAFFIC_LIMITS.minRps);
+const LOG_MAX = Math.log10(TRAFFIC_LIMITS.maxRps);
+const LOG_RANGE = Math.max(LOG_MAX - LOG_MIN, 1);
+const SLIDER_STEPS = 1000;
+
+function clampTraffic(value) {
+  if (!Number.isFinite(value)) {
+    return TRAFFIC_LIMITS.defaultRps;
+  }
+
+  return Math.min(TRAFFIC_LIMITS.maxRps, Math.max(TRAFFIC_LIMITS.minRps, Math.round(value)));
+}
+
+function getSliderValueFromRps(rps) {
+  const clampedRps = clampTraffic(rps);
+  const normalized = (Math.log10(clampedRps) - LOG_MIN) / LOG_RANGE;
+  return Math.round(normalized * SLIDER_STEPS);
+}
+
+function getRpsFromSliderValue(sliderValue) {
+  const normalized = Math.min(1, Math.max(0, sliderValue / SLIDER_STEPS));
+  return clampTraffic(10 ** (LOG_MIN + normalized * LOG_RANGE));
 }
 
 function StatCard({ icon: Icon, label, value, tone }) {
@@ -53,6 +75,8 @@ export default function ControlPanel({
   setGlobalRps,
   topologyStats,
 }) {
+  const alertCount = analytics.alerts?.length ?? 0;
+
   return (
     <section className="glass-panel panel-edge rounded-[28px] p-5">
       <div className="flex items-start justify-between gap-3">
@@ -141,32 +165,80 @@ export default function ControlPanel({
 
         <CollapsibleSection
           title="Traffic"
-          subtitle="Adjust the global request rate feeding your topology."
-          meta={`${globalRps} req/s`}
+          subtitle="Scale the model from smoke tests to multi-billion request volumes."
+          meta={formatRps(globalRps)}
         >
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm text-slate-300">Global Traffic</p>
               <div className="mt-1 flex items-end gap-2">
-                <span className="font-display text-4xl text-white">{globalRps}</span>
+                <span className="font-display text-4xl text-white">{formatCompactNumber(globalRps)}</span>
                 <span className="mb-1 text-sm text-slate-400">req/s</span>
               </div>
             </div>
             <Gauge className="text-amber-200" size={22} />
           </div>
-          <input
-            className="sim-slider mt-4 w-full"
-            type="range"
-            min="20"
-            max="420"
-            step="10"
-            value={globalRps}
-            onChange={(event) => setGlobalRps(Number(event.target.value))}
-          />
-          <div className="mt-2 flex justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-slate-400">
-            <span>20</span>
-            <span>420</span>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px]">
+            <div>
+              <input
+                className="sim-slider w-full"
+                type="range"
+                min="0"
+                max={SLIDER_STEPS}
+                step="1"
+                value={getSliderValueFromRps(globalRps)}
+                onChange={(event) => setGlobalRps(getRpsFromSliderValue(Number(event.target.value)))}
+              />
+              <div className="mt-2 flex justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-slate-400">
+                <span>{formatCompactNumber(TRAFFIC_LIMITS.minRps)}</span>
+                <span>{formatCompactNumber(TRAFFIC_LIMITS.maxRps)}</span>
+              </div>
+            </div>
+
+            <label className="text-sm text-slate-300">
+              Exact RPS
+              <input
+                type="number"
+                min={TRAFFIC_LIMITS.minRps}
+                max={TRAFFIC_LIMITS.maxRps}
+                step="100"
+                value={globalRps}
+                onChange={(event) => {
+                  const nextValue = Number(event.target.value);
+
+                  if (!Number.isFinite(nextValue)) {
+                    return;
+                  }
+
+                  setGlobalRps(clampTraffic(nextValue));
+                }}
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-white outline-none transition focus:border-cyan-300/40"
+              />
+            </label>
           </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {TRAFFIC_LIMITS.presets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setGlobalRps(preset)}
+                className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${
+                  globalRps === preset
+                    ? 'border-cyan-200/40 bg-cyan-300/15 text-cyan-100'
+                    : 'border-white/10 bg-slate-950/35 text-slate-300 hover:border-white/20 hover:bg-slate-900/55'
+                }`}
+              >
+                {formatCompactNumber(preset)}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            Use the logarithmic slider for broad jumps, then type an exact value when you want to
+            model a known traffic envelope.
+          </p>
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -180,27 +252,27 @@ export default function ControlPanel({
               icon={Activity}
               label="Successes"
               tone="default"
-              value={formatNumber(analytics.successTotal)}
+              value={formatCompactNumber(analytics.successTotal)}
             />
             <StatCard
               icon={Flame}
               label="Failures"
               tone="danger"
-              value={formatNumber(analytics.failureTotal)}
+              value={formatCompactNumber(analytics.failureTotal)}
             />
             <StatCard
               icon={Gauge}
               label="Avg Latency"
               tone="amber"
-              value={`${formatNumber(analytics.avgLatencyMs)} ms`}
+              value={`${formatCompactNumber(analytics.avgLatencyMs)} ms`}
             />
           </div>
 
           <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-sm text-slate-300">Runtime Summary</p>
             <p className="mt-1 text-sm leading-6 text-slate-400">
-              {formatNumber(analytics.throughputRps)} traced completions/sec across{' '}
-              {analytics.bottleneckCount} live bottlenecks.
+              {formatRps(analytics.throughputRps)} completing right now across{' '}
+              {analytics.bottleneckCount} bottlenecks and {alertCount} active alerts.
             </p>
           </div>
         </CollapsibleSection>

@@ -6,89 +6,374 @@ import {
   getTrafficMultiplier,
   NODE_KINDS,
 } from '../constants';
+import {
+  formatPercent,
+  formatRps,
+  formatUtilization,
+} from '../lib/format';
 
 const SNAPSHOT_INTERVAL_MS = 260;
-const WINDOW_MS = 1000;
 const HISTORY_LIMIT = 32;
+const MAX_ALERTS = 6;
+const MAX_PULSES_PER_FRAME = 6;
 
 function buildIdleState(nodes, edges) {
   const nodeMetrics = {};
   const edgeMetrics = {};
 
   nodes.forEach((node) => {
+    const capacity = getNodeCapacity(node);
+
     nodeMetrics[node.id] = {
-      loadRps: 0,
-      capacity: getNodeCapacity(node),
-      loadRatio: 0,
-      successProbability: getNodeSuccessProbability(node, 0),
-      latencyMs: getNodeLatency(node),
+      capacity,
       isBottleneck: false,
+      latencyMs: getNodeLatency(node),
+      loadRatio: 0,
+      loadRps: 0,
+      rejectedRps: 0,
+      successProbability: getNodeSuccessProbability(node, 0),
     };
   });
 
   edges.forEach((edge) => {
     edgeMetrics[edge.id] = {
-      rps: 0,
-      trafficIntensity: 0,
+      avgLatencyMs: 0,
       isActive: false,
+      rps: 0,
+      successRate: 1,
+      trafficIntensity: 0,
     };
   });
 
   return {
-    pulsesByEdge: {},
-    nodeMetrics,
-    edgeMetrics,
     analytics: {
-      successTotal: 0,
-      failureTotal: 0,
+      alerts: [],
       avgLatencyMs: 0,
-      throughputRps: 0,
       bottleneckCount: 0,
+      failureTotal: 0,
       history: [],
+      successTotal: 0,
+      throughputRps: 0,
     },
+    edgeMetrics,
+    nodeMetrics,
+    pulsesByEdge: {},
   };
 }
 
-function prune(windowEntries, now) {
-  if (!windowEntries) {
-    return [];
+function cloneVisited(visited, nextNodeId) {
+  const nextVisited = new Set(visited);
+  nextVisited.add(nextNodeId);
+  return nextVisited;
+}
+
+function buildGraph(nodes, edges) {
+  const adjacency = {};
+  const incomingCounts = {};
+  const nodeMap = {};
+  const clientNodes = [];
+
+  nodes.forEach((node) => {
+    adjacency[node.id] = [];
+    incomingCounts[node.id] = 0;
+    nodeMap[node.id] = node;
+
+    if (node.data.kind === NODE_KINDS.CLIENT) {
+      clientNodes.push(node);
+    }
+  });
+
+  edges.forEach((edge) => {
+    if (!adjacency[edge.source] || !nodeMap[edge.target]) {
+      return;
+    }
+
+    adjacency[edge.source].push(edge);
+    incomingCounts[edge.target] = (incomingCounts[edge.target] ?? 0) + 1;
+  });
+
+  return {
+    adjacency,
+    clientNodes,
+    incomingCounts,
+    nodeMap,
+  };
+}
+
+function getTrafficIntensity(flowRps, globalRps) {
+  if (flowRps <= 0 || globalRps <= 0) {
+    return 0;
   }
 
-  while (windowEntries.length > 0 && now - windowEntries[0] > WINDOW_MS) {
-    windowEntries.shift();
-  }
-
-  return windowEntries;
+  return Math.min(1, Math.log10(flowRps + 1) / Math.max(Math.log10(globalRps + 1), 1));
 }
 
 function getPulseDuration(cumulativeLatency) {
   return Math.min(1750, Math.max(280, 1600 - cumulativeLatency * 6));
 }
 
+function computeRawFlows(graph, globalRps, elapsedSeconds) {
+  const nodeInputRps = {};
+  const edgeRps = {};
+  const clientSourceRps = {};
+  const queue = [];
+  const clientCount = graph.clientNodes.length || 1;
+
+  Object.keys(graph.nodeMap).forEach((nodeId) => {
+    nodeInputRps[nodeId] = 0;
+  });
+
+  Object.values(graph.adjacency).flat().forEach((edge) => {
+    edgeRps[edge.id] = 0;
+  });
+
+  graph.clientNodes.forEach((client) => {
+    const multiplier = getTrafficMultiplier(
+      client.data.config.trafficPattern,
+      elapsedSeconds,
+    );
+    const sourceRps = (globalRps / clientCount) * multiplier;
+
+    clientSourceRps[client.id] = sourceRps;
+    nodeInputRps[client.id] += sourceRps;
+    queue.push({
+      flowRps: sourceRps,
+      nodeId: client.id,
+      visited: new Set([client.id]),
+    });
+  });
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const outgoingEdges = graph.adjacency[current.nodeId] ?? [];
+
+    if (outgoingEdges.length === 0 || current.flowRps <= 0) {
+      continue;
+    }
+
+    const splitFlow = current.flowRps / outgoingEdges.length;
+
+    outgoingEdges.forEach((edge) => {
+      if (current.visited.has(edge.target)) {
+        return;
+      }
+
+      edgeRps[edge.id] = (edgeRps[edge.id] ?? 0) + splitFlow;
+      nodeInputRps[edge.target] = (nodeInputRps[edge.target] ?? 0) + splitFlow;
+      queue.push({
+        flowRps: splitFlow,
+        nodeId: edge.target,
+        visited: cloneVisited(current.visited, edge.target),
+      });
+    });
+  }
+
+  return {
+    clientSourceRps,
+    edgeRps,
+    nodeInputRps,
+  };
+}
+
+function buildNodeMetrics(nodes, nodeInputRps) {
+  const metrics = {};
+  let bottleneckCount = 0;
+
+  nodes.forEach((node) => {
+    const capacity = getNodeCapacity(node);
+    const loadRps = nodeInputRps[node.id] ?? 0;
+    const finiteCapacity = Number.isFinite(capacity);
+    const loadRatio = finiteCapacity ? loadRps / Math.max(capacity, 1) : 0;
+    const successProbability = getNodeSuccessProbability(node, loadRatio);
+    const rejectedRps = loadRps * (1 - successProbability);
+    const isBottleneck = finiteCapacity && loadRps > capacity;
+
+    if (isBottleneck) {
+      bottleneckCount += 1;
+    }
+
+    metrics[node.id] = {
+      capacity,
+      isBottleneck,
+      latencyMs: getNodeLatency(node),
+      loadRatio,
+      loadRps,
+      rejectedRps,
+      successProbability,
+    };
+  });
+
+  return {
+    bottleneckCount,
+    metrics,
+  };
+}
+
+function computeOutcomeFlows(graph, nodeMetrics, clientSourceRps) {
+  const edgeLatencyTotals = {};
+  const edgeSuccessOutputRps = {};
+  const queue = graph.clientNodes.map((client) => ({
+    cumulativeLatency: 0,
+    nodeId: client.id,
+    outputRps: clientSourceRps[client.id] ?? 0,
+    visited: new Set([client.id]),
+  }));
+
+  let avgLatencyMs = 0;
+  let failureRps = 0;
+  let latencyWeighted = 0;
+  let successRps = 0;
+  let terminalRps = 0;
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currentNode = graph.nodeMap[current.nodeId];
+    const outgoingEdges = graph.adjacency[current.nodeId] ?? [];
+
+    if (outgoingEdges.length === 0) {
+      if (currentNode?.data.kind !== NODE_KINDS.CLIENT) {
+        successRps += current.outputRps;
+        terminalRps += current.outputRps;
+        latencyWeighted += current.cumulativeLatency * current.outputRps;
+      }
+
+      continue;
+    }
+
+    const splitOutput = current.outputRps / outgoingEdges.length;
+
+    outgoingEdges.forEach((edge) => {
+      if (current.visited.has(edge.target) || splitOutput <= 0) {
+        return;
+      }
+
+      const targetMetric = nodeMetrics[edge.target];
+
+      if (!targetMetric) {
+        return;
+      }
+
+      const successfulOutput = splitOutput * targetMetric.successProbability;
+      const failedAtTarget = splitOutput - successfulOutput;
+      const nextLatency = current.cumulativeLatency + targetMetric.latencyMs;
+
+      edgeSuccessOutputRps[edge.id] = (edgeSuccessOutputRps[edge.id] ?? 0) + successfulOutput;
+      edgeLatencyTotals[edge.id] = (edgeLatencyTotals[edge.id] ?? 0) + nextLatency * splitOutput;
+
+      if (failedAtTarget > 0) {
+        failureRps += failedAtTarget;
+        terminalRps += failedAtTarget;
+        latencyWeighted += nextLatency * failedAtTarget;
+      }
+
+      if (successfulOutput <= 0) {
+        return;
+      }
+
+      const targetOutgoingEdges = graph.adjacency[edge.target] ?? [];
+
+      if (targetOutgoingEdges.length === 0) {
+        successRps += successfulOutput;
+        terminalRps += successfulOutput;
+        latencyWeighted += nextLatency * successfulOutput;
+        return;
+      }
+
+      queue.push({
+        cumulativeLatency: nextLatency,
+        nodeId: edge.target,
+        outputRps: successfulOutput,
+        visited: cloneVisited(current.visited, edge.target),
+      });
+    });
+  }
+
+  if (terminalRps > 0) {
+    avgLatencyMs = latencyWeighted / terminalRps;
+  }
+
+  return {
+    avgLatencyMs,
+    edgeLatencyTotals,
+    edgeSuccessOutputRps,
+    failureRps,
+    successRps,
+    terminalRps,
+  };
+}
+
+function buildAlerts(nodes, graph, nodeMetrics) {
+  const alerts = [];
+
+  nodes.forEach((node) => {
+    const metric = nodeMetrics[node.id];
+
+    if (!metric || node.data.kind === NODE_KINDS.CLIENT) {
+      return;
+    }
+
+    const incomingCount = graph.incomingCounts[node.id] ?? 0;
+
+    if (metric.isBottleneck) {
+      alerts.push({
+        detail: `${formatRps(metric.loadRps)} is landing on a ${formatRps(metric.capacity)} ceiling (${formatUtilization(metric.loadRatio)} utilization).${incomingCount > 1 ? ` Traffic from ${incomingCount} upstream paths is converging here.` : ''}`,
+        id: `${node.id}-capacity`,
+        severity: metric.loadRatio > 1.5 ? 'critical' : 'warning',
+        title: `${node.data.label} is overloaded`,
+      });
+      return;
+    }
+
+    if (metric.rejectedRps > 0 && metric.successProbability < 0.985) {
+      let reason = `Estimated success is down to ${formatPercent(metric.successProbability)}.`;
+
+      if (node.data.kind === NODE_KINDS.WEB_SERVER && node.data.config.failureRate > 0) {
+        reason += ` Intrinsic failure is set to ${node.data.config.failureRate}%.`;
+      } else {
+        reason += ` Current utilization is ${formatUtilization(metric.loadRatio)}.`;
+      }
+
+      alerts.push({
+        detail: `${formatRps(metric.rejectedRps)} is being dropped at this hop. ${reason}`,
+        id: `${node.id}-drops`,
+        severity: metric.successProbability < 0.94 ? 'critical' : 'warning',
+        title: `${node.data.label} is dropping requests`,
+      });
+    }
+  });
+
+  const severityRank = {
+    critical: 0,
+    warning: 1,
+  };
+
+  return alerts
+    .sort((left, right) => (
+      severityRank[left.severity] - severityRank[right.severity]
+    ))
+    .slice(0, MAX_ALERTS);
+}
+
 export function useSimulation({ nodes, edges, isRunning, globalRps }) {
   const [state, setState] = useState(() => buildIdleState(nodes, edges));
-  const latestGraphRef = useRef({ nodes, edges, globalRps, isRunning });
+  const latestGraphRef = useRef({ edges, globalRps, isRunning, nodes });
   const animationFrameRef = useRef(null);
-  const lastFrameRef = useRef(0);
+  const edgePulseAccumulatorRef = useRef({});
   const elapsedSecondsRef = useRef(0);
+  const historyRef = useRef([]);
+  const lastFrameRef = useRef(0);
+  const lastSnapshotRef = useRef(0);
   const pulseCounterRef = useRef(0);
-  const roundRobinRef = useRef({});
-  const perClientAccumulatorRef = useRef({});
-  const nodeHitsRef = useRef({});
-  const edgeHitsRef = useRef({});
-  const completionHitsRef = useRef([]);
   const pulsesRef = useRef([]);
   const totalsRef = useRef({
-    success: 0,
     failure: 0,
     latency: 0,
-    completions: 0,
+    terminals: 0,
+    success: 0,
   });
-  const historyRef = useRef([]);
-  const lastSnapshotRef = useRef(0);
 
   useEffect(() => {
-    latestGraphRef.current = { nodes, edges, globalRps, isRunning };
+    latestGraphRef.current = { edges, globalRps, isRunning, nodes };
 
     if (!isRunning) {
       setState(buildIdleState(nodes, edges));
@@ -104,23 +389,19 @@ export function useSimulation({ nodes, edges, isRunning, globalRps }) {
       return undefined;
     }
 
-    lastFrameRef.current = 0;
+    edgePulseAccumulatorRef.current = {};
     elapsedSecondsRef.current = 0;
+    historyRef.current = [];
+    lastFrameRef.current = 0;
+    lastSnapshotRef.current = 0;
     pulseCounterRef.current = 0;
-    roundRobinRef.current = {};
-    perClientAccumulatorRef.current = {};
-    nodeHitsRef.current = {};
-    edgeHitsRef.current = {};
-    completionHitsRef.current = [];
     pulsesRef.current = [];
     totalsRef.current = {
-      success: 0,
       failure: 0,
       latency: 0,
-      completions: 0,
+      terminals: 0,
+      success: 0,
     };
-    historyRef.current = [];
-    lastSnapshotRef.current = 0;
     setState(buildIdleState(nodes, edges));
 
     const step = (timestamp) => {
@@ -135,155 +416,63 @@ export function useSimulation({ nodes, edges, isRunning, globalRps }) {
       }
 
       const deltaMs = Math.min(50, timestamp - lastFrameRef.current);
+      const deltaSeconds = deltaMs / 1000;
       lastFrameRef.current = timestamp;
-      elapsedSecondsRef.current += deltaMs / 1000;
+      elapsedSecondsRef.current += deltaSeconds;
 
-      const nodeMap = {};
-      const adjacency = {};
-      const clientNodes = [];
+      const graph = buildGraph(currentGraph.nodes, currentGraph.edges);
+      const rawFlows = computeRawFlows(graph, currentGraph.globalRps, elapsedSecondsRef.current);
+      const nodeMetricsResult = buildNodeMetrics(currentGraph.nodes, rawFlows.nodeInputRps);
+      const outcomes = computeOutcomeFlows(graph, nodeMetricsResult.metrics, rawFlows.clientSourceRps);
+      const alerts = buildAlerts(currentGraph.nodes, graph, nodeMetricsResult.metrics);
 
-      currentGraph.nodes.forEach((node) => {
-        nodeMap[node.id] = node;
-        adjacency[node.id] = [];
+      totalsRef.current.success += outcomes.successRps * deltaSeconds;
+      totalsRef.current.failure += outcomes.failureRps * deltaSeconds;
+      totalsRef.current.latency += outcomes.avgLatencyMs * outcomes.terminalRps * deltaSeconds;
+      totalsRef.current.terminals += outcomes.terminalRps * deltaSeconds;
 
-        if (node.data.kind === NODE_KINDS.CLIENT) {
-          clientNodes.push(node);
-        }
-      });
+      const edgeMetrics = {};
 
       currentGraph.edges.forEach((edge) => {
-        if (adjacency[edge.source]) {
-          adjacency[edge.source].push(edge);
+        const rps = rawFlows.edgeRps[edge.id] ?? 0;
+        const successOutputRps = outcomes.edgeSuccessOutputRps[edge.id] ?? 0;
+        const avgLatencyMs = rps > 0 ? (outcomes.edgeLatencyTotals[edge.id] ?? 0) / rps : 0;
+        const trafficIntensity = getTrafficIntensity(rps, currentGraph.globalRps);
+        const successRate = rps > 0 ? successOutputRps / rps : 1;
+
+        edgeMetrics[edge.id] = {
+          avgLatencyMs,
+          isActive: rps > 0,
+          rps,
+          successRate,
+          trafficIntensity,
+        };
+
+        if (rps <= 0) {
+          edgePulseAccumulatorRef.current[edge.id] = 0;
+          return;
         }
-      });
 
-      const perClientBaseRps = clientNodes.length > 0
-        ? currentGraph.globalRps / clientNodes.length
-        : 0;
+        const pulseRatePerSecond = 0.5 + trafficIntensity * 6;
+        const nextAccumulator = (edgePulseAccumulatorRef.current[edge.id] ?? 0)
+          + pulseRatePerSecond * deltaSeconds;
+        const spawnCount = Math.min(MAX_PULSES_PER_FRAME, Math.floor(nextAccumulator));
 
-      clientNodes.forEach((client) => {
-        const multiplier = getTrafficMultiplier(
-          client.data.config.trafficPattern,
-          elapsedSecondsRef.current,
-        );
+        edgePulseAccumulatorRef.current[edge.id] = nextAccumulator - spawnCount;
 
-        const nextAccumulator = (perClientAccumulatorRef.current[client.id] ?? 0)
-          + (perClientBaseRps * multiplier * deltaMs) / 1000;
-
-        const spawnCount = Math.min(16, Math.floor(nextAccumulator));
-        perClientAccumulatorRef.current[client.id] = nextAccumulator - spawnCount;
-
-        for (let iteration = 0; iteration < spawnCount; iteration += 1) {
-          const queue = [
-            {
-              nodeId: client.id,
-              cumulativeLatency: 0,
-              cumulativeSuccess: 1,
-            },
-          ];
-
-          const visited = new Set([client.id]);
-          const traversedNodes = [{ nodeId: client.id, latencyMs: 0, successProbability: 1 }];
-          const traversedEdges = [];
-          const completions = [];
-
-          // We use a breadth-first walk so each emitted wave explores the live graph level by level.
-          while (queue.length > 0) {
-            const current = queue.shift();
-            const activeNode = nodeMap[current.nodeId];
-            const outgoingEdges = adjacency[current.nodeId] ?? [];
-
-            let nextEdges = outgoingEdges;
-
-            if (activeNode?.data.kind === NODE_KINDS.LOAD_BALANCER && outgoingEdges.length > 0) {
-              const rrIndex = roundRobinRef.current[activeNode.id] ?? 0;
-              nextEdges = [outgoingEdges[rrIndex % outgoingEdges.length]];
-              roundRobinRef.current[activeNode.id] = rrIndex + 1;
-            }
-
-            if (nextEdges.length === 0 && current.nodeId !== client.id) {
-              completions.push({
-                latencyMs: current.cumulativeLatency,
-                successProbability: current.cumulativeSuccess,
-              });
-            }
-
-            nextEdges.forEach((edge) => {
-              if (visited.has(edge.target)) {
-                return;
-              }
-
-              const targetNode = nodeMap[edge.target];
-
-              if (!targetNode) {
-                return;
-              }
-
-              visited.add(edge.target);
-              const currentNodeHits = prune(nodeHitsRef.current[targetNode.id], timestamp);
-              const loadRatio = currentNodeHits.length / Math.max(getNodeCapacity(targetNode), 1);
-              const hopLatency = getNodeLatency(targetNode);
-              const hopSuccess = getNodeSuccessProbability(targetNode, loadRatio);
-
-              const nextStep = {
-                nodeId: targetNode.id,
-                cumulativeLatency: current.cumulativeLatency + hopLatency,
-                cumulativeSuccess: current.cumulativeSuccess * hopSuccess,
-              };
-
-              traversedNodes.push({
-                nodeId: targetNode.id,
-                latencyMs: nextStep.cumulativeLatency,
-                successProbability: nextStep.cumulativeSuccess,
-              });
-              traversedEdges.push({
-                edgeId: edge.id,
-                cumulativeLatency: nextStep.cumulativeLatency,
-                successProbability: nextStep.cumulativeSuccess,
-              });
-              queue.push(nextStep);
-            });
-          }
-
-          if (completions.length === 0 && traversedNodes.length > 1) {
-            const lastNode = traversedNodes[traversedNodes.length - 1];
-            completions.push({
-              latencyMs: lastNode.latencyMs,
-              successProbability: lastNode.successProbability,
-            });
-          }
-
-          traversedNodes.forEach((visit) => {
-            const hits = nodeHitsRef.current[visit.nodeId] ?? [];
-            hits.push(timestamp);
-            nodeHitsRef.current[visit.nodeId] = hits;
-          });
-
-          traversedEdges.forEach((visit) => {
-            const hits = edgeHitsRef.current[visit.edgeId] ?? [];
-            hits.push(timestamp);
-            edgeHitsRef.current[visit.edgeId] = hits;
-            pulsesRef.current.push({
-              id: `pulse-${pulseCounterRef.current += 1}`,
-              edgeId: visit.edgeId,
-              start: timestamp,
-              durationMs: getPulseDuration(visit.cumulativeLatency),
-              accent: visit.successProbability < 0.85 ? '#ff7557' : '#5de2e7',
-            });
-          });
-
-          completions.forEach((completion) => {
-            completionHitsRef.current.push(timestamp);
-            totalsRef.current.success += completion.successProbability;
-            totalsRef.current.failure += 1 - completion.successProbability;
-            totalsRef.current.latency += completion.latencyMs;
-            totalsRef.current.completions += 1;
+        for (let index = 0; index < spawnCount; index += 1) {
+          pulsesRef.current.push({
+            accent: successRate < 0.92 ? '#ff7557' : '#5de2e7',
+            durationMs: getPulseDuration(avgLatencyMs),
+            edgeId: edge.id,
+            id: `pulse-${pulseCounterRef.current += 1}`,
+            start: timestamp,
           });
         }
       });
 
       const pulsesByEdge = {};
-      const activePulses = [];
+      const nextPulses = [];
 
       pulsesRef.current.forEach((pulse) => {
         const progress = (timestamp - pulse.start) / pulse.durationMs;
@@ -293,49 +482,11 @@ export function useSimulation({ nodes, edges, isRunning, globalRps }) {
         }
 
         const nextPulse = { ...pulse, progress };
-        activePulses.push(nextPulse);
+        nextPulses.push(nextPulse);
         pulsesByEdge[pulse.edgeId] = [...(pulsesByEdge[pulse.edgeId] ?? []), nextPulse];
       });
 
-      pulsesRef.current = activePulses;
-
-      const nodeMetrics = {};
-      let bottleneckCount = 0;
-
-      currentGraph.nodes.forEach((node) => {
-        const hits = prune(nodeHitsRef.current[node.id], timestamp);
-        const capacity = getNodeCapacity(node);
-        const loadRps = hits.length;
-        const finiteCapacity = Number.isFinite(capacity);
-        const loadRatio = finiteCapacity ? loadRps / Math.max(capacity, 1) : 0;
-        const isBottleneck = finiteCapacity && loadRps > capacity;
-
-        if (isBottleneck) {
-          bottleneckCount += 1;
-        }
-
-        nodeMetrics[node.id] = {
-          loadRps,
-          capacity,
-          loadRatio,
-          successProbability: getNodeSuccessProbability(node, loadRatio),
-          latencyMs: getNodeLatency(node),
-          isBottleneck,
-        };
-      });
-
-      const edgeMetrics = {};
-
-      currentGraph.edges.forEach((edge) => {
-        const hits = prune(edgeHitsRef.current[edge.id], timestamp);
-        const rps = hits.length;
-
-        edgeMetrics[edge.id] = {
-          rps,
-          trafficIntensity: Math.min(1, rps / Math.max(currentGraph.globalRps, 1)),
-          isActive: rps > 0,
-        };
-      });
+      pulsesRef.current = nextPulses;
 
       if (
         historyRef.current.length === 0
@@ -344,30 +495,30 @@ export function useSimulation({ nodes, edges, isRunning, globalRps }) {
         historyRef.current = [
           ...historyRef.current.slice(-(HISTORY_LIMIT - 1)),
           {
-            time: timestamp,
-            success: totalsRef.current.success,
             failure: totalsRef.current.failure,
+            success: totalsRef.current.success,
+            time: timestamp,
           },
         ];
         lastSnapshotRef.current = timestamp;
       }
 
-      const completed = totalsRef.current.completions;
-      const completionWindow = prune(completionHitsRef.current, timestamp);
+      const terminals = totalsRef.current.terminals;
       const analytics = {
-        successTotal: totalsRef.current.success,
+        alerts,
+        avgLatencyMs: terminals > 0 ? totalsRef.current.latency / terminals : 0,
+        bottleneckCount: nodeMetricsResult.bottleneckCount,
         failureTotal: totalsRef.current.failure,
-        avgLatencyMs: completed > 0 ? totalsRef.current.latency / completed : 0,
-        throughputRps: completionWindow.length,
-        bottleneckCount,
         history: historyRef.current,
+        successTotal: totalsRef.current.success,
+        throughputRps: outcomes.terminalRps,
       };
 
       setState({
-        pulsesByEdge,
-        nodeMetrics,
-        edgeMetrics,
         analytics,
+        edgeMetrics,
+        nodeMetrics: nodeMetricsResult.metrics,
+        pulsesByEdge,
       });
 
       animationFrameRef.current = requestAnimationFrame(step);

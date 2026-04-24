@@ -1,13 +1,11 @@
+import { Flame } from 'lucide-react';
 import { Handle, Position } from '@xyflow/react';
 import {
   COMPONENT_REGISTRY,
   getTrafficPatternLabel,
   NODE_KINDS,
 } from '../../constants';
-
-function formatMetric(value) {
-  return Number.isFinite(value) ? Math.round(value) : 'inf';
-}
+import { formatCompactNumber, formatPercent, formatRps } from '../../lib/format';
 
 function getFacts(data, simulation) {
   const config = data.config;
@@ -16,7 +14,7 @@ function getFacts(data, simulation) {
     case NODE_KINDS.CLIENT:
       return [
         { label: 'Pattern', value: getTrafficPatternLabel(config.trafficPattern) },
-        { label: 'Live Load', value: `${formatMetric(simulation?.loadRps ?? 0)} req/s` },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
       ];
     case NODE_KINDS.LOAD_BALANCER:
       return [
@@ -26,23 +24,23 @@ function getFacts(data, simulation) {
     case NODE_KINDS.WEB_SERVER:
       return [
         { label: 'Latency', value: `${config.latencyMs} ms` },
-        { label: 'Capacity', value: `${config.capacityRps} req/s` },
+        { label: 'Capacity', value: formatRps(config.capacityRps) },
         { label: 'Failure', value: `${config.failureRate}%` },
-        { label: 'Live Load', value: `${formatMetric(simulation?.loadRps ?? 0)} req/s` },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
       ];
     case NODE_KINDS.DATABASE:
       return [
         { label: 'Read', value: `${config.readLatencyMs} ms` },
         { label: 'Write', value: `${config.writeLatencyMs} ms` },
-        { label: 'Conn', value: `${config.connectionLimit}` },
-        { label: 'Live Load', value: `${formatMetric(simulation?.loadRps ?? 0)} req/s` },
+        { label: 'Conn', value: formatCompactNumber(config.connectionLimit) },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
       ];
     case NODE_KINDS.CACHE:
       return [
         { label: 'Latency', value: `${config.latencyMs} ms` },
-        { label: 'Capacity', value: `${config.capacityRps} req/s` },
+        { label: 'Capacity', value: formatRps(config.capacityRps) },
         { label: 'Hit Rate', value: `${config.hitRate}%` },
-        { label: 'Live Load', value: `${formatMetric(simulation?.loadRps ?? 0)} req/s` },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
       ];
     default:
       return [];
@@ -92,7 +90,7 @@ export default function ArchitectureNode({ data, selected }) {
             </div>
           </div>
         </div>
-        {bottleneck ? <span className="text-xl">🔥</span> : null}
+        {bottleneck ? <Flame size={18} className="text-red-300" /> : null}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -110,12 +108,12 @@ export default function ArchitectureNode({ data, selected }) {
         <div>
           <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Success</div>
           <div className="mt-1 text-sm text-white">
-            {((simulation?.successProbability ?? 1) * 100).toFixed(1)}%
+            {formatPercent(simulation?.successProbability ?? 1)}
           </div>
         </div>
         <div className="text-right">
           <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Latency</div>
-          <div className="mt-1 text-sm text-white">{formatMetric(simulation?.latencyMs ?? 0)} ms</div>
+          <div className="mt-1 text-sm text-white">{formatCompactNumber(simulation?.latencyMs ?? 0)} ms</div>
         </div>
       </div>
     </div>

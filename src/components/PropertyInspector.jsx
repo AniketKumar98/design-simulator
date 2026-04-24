@@ -1,9 +1,18 @@
-import { ArrowRight, Copy, Trash2 } from 'lucide-react';
+import { ArrowRight, Copy, Flame, Trash2 } from 'lucide-react';
 import { COMPONENT_REGISTRY, NODE_KINDS } from '../constants';
+import { formatCompactNumber, formatPercent, formatRps, formatUtilization } from '../lib/format';
 import CollapsibleSection from './CollapsibleSection';
 
-function formatCapacity(capacity) {
-  return Number.isFinite(capacity) ? `${capacity} req/s` : 'Unlimited';
+function formatNodeCapacity(node, capacity) {
+  if (!Number.isFinite(capacity)) {
+    return 'Unlimited';
+  }
+
+  if (node.data.kind === NODE_KINDS.DATABASE) {
+    return `${formatCompactNumber(capacity)} conn`;
+  }
+
+  return formatRps(capacity);
 }
 
 function InventoryButton({
@@ -47,6 +56,7 @@ function NodeEditor({
 }) {
   const registry = COMPONENT_REGISTRY[node.data.kind];
   const simulation = node.data.simulation;
+  const rejectedRps = simulation?.rejectedRps ?? 0;
 
   return (
     <>
@@ -55,7 +65,12 @@ function NodeEditor({
           <h2 className="font-display text-2xl text-white">{registry.label}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">{registry.description}</p>
         </div>
-        {simulation?.isBottleneck ? <span className="text-2xl">🔥</span> : null}
+        {simulation?.isBottleneck ? (
+          <div className="flex items-center gap-2 rounded-full border border-red-300/20 bg-red-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-red-100">
+            <Flame size={14} />
+            Hot
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -90,17 +105,39 @@ function NodeEditor({
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
           <p className="text-sm text-slate-300">Current Load</p>
+          <p className="mt-2 font-display text-3xl text-white">{formatRps(simulation?.loadRps ?? 0)}</p>
+        </div>
+        <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+          <p className="text-sm text-slate-300">Capacity Ceiling</p>
           <p className="mt-2 font-display text-3xl text-white">
-            {Math.round(simulation?.loadRps ?? 0)} req/s
+            {formatNodeCapacity(node, simulation?.capacity ?? Number.POSITIVE_INFINITY)}
           </p>
         </div>
         <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
-          <p className="text-sm text-slate-300">Capacity</p>
+          <p className="text-sm text-slate-300">Utilization</p>
           <p className="mt-2 font-display text-3xl text-white">
-            {formatCapacity(simulation?.capacity ?? Number.POSITIVE_INFINITY)}
+            {formatUtilization(simulation?.loadRatio ?? 0)}
           </p>
         </div>
+        <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+          <p className="text-sm text-slate-300">Dropped Traffic</p>
+          <p className="mt-2 font-display text-3xl text-white">{formatRps(rejectedRps)}</p>
+        </div>
       </div>
+
+      {simulation?.isBottleneck ? (
+        <div className="mt-3 rounded-[18px] border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-100">
+          This node is receiving more traffic than it can safely process. Add capacity, scale the
+          tier out, or reduce the upstream request load.
+        </div>
+      ) : null}
+
+      {!simulation?.isBottleneck && rejectedRps > 0 ? (
+        <div className="mt-3 rounded-[18px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-100">
+          This node is still dropping {formatRps(rejectedRps)} because its estimated success rate is{' '}
+          {formatPercent(simulation?.successProbability ?? 1)}.
+        </div>
+      ) : null}
 
       {node.data.kind === NODE_KINDS.LOAD_BALANCER ? (
         <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 p-4">
@@ -149,8 +186,9 @@ function NodeEditor({
 }
 
 function EdgeEditor({ edge, onDeleteSelection }) {
-  const trafficIntensity = edge.data?.trafficIntensity ?? 0;
+  const avgLatencyMs = edge.data?.avgLatencyMs ?? 0;
   const rps = edge.data?.rps ?? 0;
+  const successRate = edge.data?.successRate ?? 1;
 
   return (
     <>
@@ -167,15 +205,19 @@ function EdgeEditor({ edge, onDeleteSelection }) {
           <ArrowRight size={16} className="text-cyan-200" />
           <span>{edge.data?.targetLabel ?? edge.target}</span>
         </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className="rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Live Flow</div>
-            <div className="mt-1 font-display text-2xl text-white">{Math.round(rps)} req/s</div>
+            <div className="mt-1 font-display text-2xl text-white">{formatRps(rps)}</div>
           </div>
           <div className="rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-3">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Intensity</div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Success</div>
+            <div className="mt-1 font-display text-2xl text-white">{formatPercent(successRate)}</div>
+          </div>
+          <div className="rounded-[18px] border border-white/8 bg-slate-950/35 px-3 py-3">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Avg Latency</div>
             <div className="mt-1 font-display text-2xl text-white">
-              {Math.round(trafficIntensity * 100)}%
+              {formatCompactNumber(avgLatencyMs)} ms
             </div>
           </div>
         </div>
@@ -263,7 +305,7 @@ export default function PropertyInspector({
                     active={selectedNodeId === inventoryNode.id}
                     title={inventoryNode.data.label}
                     description={registry.label}
-                    meta={inventoryNode.data.simulation?.isBottleneck ? 'hot' : registry.shortLabel}
+                    meta={inventoryNode.data.simulation?.isBottleneck ? 'overloaded' : registry.shortLabel}
                     onClick={() => onSelectNode(inventoryNode.id)}
                   />
                 );
@@ -290,14 +332,14 @@ export default function PropertyInspector({
                   key={inventoryEdge.id}
                   active={selectedEdgeId === inventoryEdge.id}
                   title={`${inventoryEdge.data?.sourceLabel ?? inventoryEdge.source} -> ${inventoryEdge.data?.targetLabel ?? inventoryEdge.target}`}
-                  description={`${Math.round(inventoryEdge.data?.rps ?? 0)} req/s live flow`}
-                  meta={`${Math.round((inventoryEdge.data?.trafficIntensity ?? 0) * 100)}%`}
+                  description={`${formatRps(inventoryEdge.data?.rps ?? 0)} live flow | ${formatCompactNumber(inventoryEdge.data?.avgLatencyMs ?? 0)} ms avg latency`}
+                  meta={formatPercent(inventoryEdge.data?.successRate ?? 1)}
                   onClick={() => onSelectEdge(inventoryEdge.id)}
                 />
               ))
             ) : (
               <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-400">
-                No links yet. Drag from a node's right handle to another node's left handle to
+                No links yet. Drag from a node&apos;s right handle to another node&apos;s left handle to
                 connect them.
               </div>
             )}

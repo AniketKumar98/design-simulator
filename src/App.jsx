@@ -26,6 +26,7 @@ import {
   NODE_KINDS,
   RF_EDGE_TYPE,
   STARTER_TOPOLOGIES,
+  TRAFFIC_LIMITS,
 } from './constants';
 import { useSimulation } from './hooks/useSimulation';
 import { buildShareUrl, readGraphFromUrl } from './lib/serialization';
@@ -171,7 +172,7 @@ function SimulatorWorkspace() {
   const [selectedNodeId, setSelectedNodeId] = useState(initialGraph.current.nodes[1]?.id ?? null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [globalRps, setGlobalRps] = useState(120);
+  const [globalRps, setGlobalRps] = useState(TRAFFIC_LIMITS.defaultRps);
   const [copyFeedback, setCopyFeedback] = useState('');
 
   const simulation = useSimulation({
@@ -301,7 +302,7 @@ function SimulatorWorkspace() {
 
   function handleResetGraph() {
     applyGraph(getDefaultGraph(), { selectedNodeId: 'lb-1' });
-    setGlobalRps(120);
+    setGlobalRps(TRAFFIC_LIMITS.defaultRps);
   }
 
   function handleClearBoard() {
@@ -440,8 +441,10 @@ function SimulatorWorkspace() {
     },
     data: {
       pulses: simulation.pulsesByEdge[edge.id] ?? [],
+      avgLatencyMs: simulation.edgeMetrics[edge.id]?.avgLatencyMs ?? 0,
       rps: simulation.edgeMetrics[edge.id]?.rps ?? 0,
       sourceLabel: nodeById[edge.source]?.data.label ?? edge.source,
+      successRate: simulation.edgeMetrics[edge.id]?.successRate ?? 1,
       targetLabel: nodeById[edge.target]?.data.label ?? edge.target,
       trafficIntensity: simulation.edgeMetrics[edge.id]?.trafficIntensity ?? 0,
     },
