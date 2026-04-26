@@ -1,5 +1,10 @@
 import { Plus } from 'lucide-react';
-import { COMPONENT_REGISTRY, SIDEBAR_COMPONENTS, STARTER_TOPOLOGIES } from '../constants';
+import {
+  COMPONENT_GROUPS,
+  COMPONENT_REGISTRY,
+  SIDEBAR_COMPONENTS,
+  STARTER_TOPOLOGIES,
+} from '../constants';
 import CollapsibleSection from './CollapsibleSection';
 
 export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
@@ -10,18 +15,18 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
           Component Rack
         </p>
         <h2 className="mt-2 font-display text-2xl text-white">
-          Build and test smaller topologies faster
+          Build modern system designs with real platform primitives
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          Quick starts are now pinned near the top, and the heavier lists can collapse when you
-          want more room for the canvas.
+          Sketch sync APIs, queues, Kafka backbones, workers, SQL, NoSQL, search, and blob
+          storage without leaving the canvas.
         </p>
       </div>
 
       <div className="soft-scrollbar flex-1 space-y-4 overflow-y-auto pr-1">
         <CollapsibleSection
           title="Quick Start"
-          subtitle="Load a ready-made 2-node, 3-node, 4-node, or full demo flow."
+          subtitle="Load a ready-made flow, from a tiny smoke test to a modern event-driven platform."
           meta={`${STARTER_TOPOLOGIES.length} presets`}
         >
           <div className="space-y-2">
@@ -39,64 +44,69 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
           </div>
         </CollapsibleSection>
 
-        <CollapsibleSection
-          title="Components"
-          subtitle="Click Add for instant placement, or drag a card onto the canvas."
-          meta={`${SIDEBAR_COMPONENTS.length} types`}
-        >
-          <div className="space-y-3">
-            {SIDEBAR_COMPONENTS.map((kind) => {
-              const registry = COMPONENT_REGISTRY[kind];
-              const Icon = registry.icon;
+        {COMPONENT_GROUPS.map((group, index) => (
+          <CollapsibleSection
+            key={group.id}
+            title={group.title}
+            subtitle={group.subtitle}
+            meta={`${group.kinds.length} types`}
+            defaultOpen={index === 0}
+          >
+            <div className="space-y-3">
+              {group.kinds.map((kind) => {
+                const registry = COMPONENT_REGISTRY[kind];
+                const Icon = registry.icon;
 
-              return (
-                <div
-                  key={kind}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('application/architectsim-node', kind);
-                    event.dataTransfer.effectAllowed = 'move';
-                  }}
-                  className="group relative w-full overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/35 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40 hover:bg-slate-900/55"
-                >
+                return (
                   <div
-                    className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${registry.accent} opacity-75`}
-                  />
-                  <div className="flex items-start gap-3">
+                    key={kind}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData('application/architectsim-node', kind);
+                      event.dataTransfer.effectAllowed = 'move';
+                    }}
+                    className="group relative w-full overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/35 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40 hover:bg-slate-900/55"
+                  >
                     <div
-                      className={`mt-1 flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${registry.accent} text-slate-950 shadow-lg shadow-black/20`}
-                    >
-                      <Icon size={20} strokeWidth={2.25} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-display text-base text-white">{registry.shortLabel}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-300">
-                            Drag
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onAddComponent(kind)}
-                            className="flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-200/35 hover:bg-cyan-300/15"
-                          >
-                            <Plus size={12} />
-                            Add
-                          </button>
-                        </div>
+                      className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${registry.accent} opacity-75`}
+                    />
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-1 flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${registry.accent} text-slate-950 shadow-lg shadow-black/20`}
+                      >
+                        <Icon size={20} strokeWidth={2.25} />
                       </div>
-                      <p className="mt-1 text-sm leading-5 text-slate-300">{registry.description}</p>
+                      <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-display text-base text-white">{registry.shortLabel}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-300">
+                              Drag
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onAddComponent(kind)}
+                              className="flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-200/35 hover:bg-cyan-300/15"
+                            >
+                              <Plus size={12} />
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-sm leading-5 text-slate-300">{registry.description}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </CollapsibleSection>
+                );
+              })}
+            </div>
+          </CollapsibleSection>
+        ))}
 
         <CollapsibleSection
           title="Connect Nodes"
-          subtitle="Wire nodes the same way you would in a diagramming board."
+          subtitle="Wire request paths, async handoffs, and fan-out relationships just like a design board."
+          meta={`${SIDEBAR_COMPONENTS.length} total`}
           defaultOpen={false}
         >
           <p className="text-sm leading-6 text-slate-300">

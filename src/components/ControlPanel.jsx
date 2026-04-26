@@ -279,7 +279,7 @@ export default function ControlPanel({
 
         <CollapsibleSection
           title="Topology Health"
-          subtitle="Use this when the simulation behaves strangely or you want to sanity-check the graph."
+          subtitle="Use this when the simulation behaves strangely or you want to sanity-check a larger platform graph."
           meta={`${topologyStats.warnings.length} warnings`}
           defaultOpen={false}
         >
@@ -293,13 +293,17 @@ export default function ControlPanel({
               <div className="mt-1 font-display text-2xl text-white">{topologyStats.ingressCount}</div>
             </div>
             <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Data Stores</div>
-              <div className="mt-1 font-display text-2xl text-white">{topologyStats.dataStoreCount}</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Stateful</div>
+              <div className="mt-1 font-display text-2xl text-white">{topologyStats.statefulCount}</div>
             </div>
             <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Warnings</div>
-              <div className="mt-1 font-display text-2xl text-white">{topologyStats.warnings.length}</div>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Async</div>
+              <div className="mt-1 font-display text-2xl text-white">{topologyStats.asyncCount}</div>
             </div>
+          </div>
+          <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-400">
+            {topologyStats.warnings.length} active warnings across {topologyStats.statefulCount}{' '}
+            stateful components and {topologyStats.asyncCount} async tiers.
           </div>
           <div className="mt-3 space-y-2">
             {topologyStats.warnings.length > 0 ? (

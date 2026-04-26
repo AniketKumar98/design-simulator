@@ -1,6 +1,17 @@
 import { ArrowRight, Copy, Flame, Trash2 } from 'lucide-react';
-import { COMPONENT_REGISTRY, NODE_KINDS } from '../constants';
-import { formatCompactNumber, formatPercent, formatRps, formatUtilization } from '../lib/format';
+import {
+  COMPONENT_REGISTRY,
+  getNodeCapacityUnit,
+  isBufferingNodeKind,
+  NODE_KINDS,
+} from '../constants';
+import {
+  formatCompactNumber,
+  formatPercent,
+  formatRps,
+  formatUtilization,
+  formatValueWithUnit,
+} from '../lib/format';
 import CollapsibleSection from './CollapsibleSection';
 
 function formatNodeCapacity(node, capacity) {
@@ -8,11 +19,21 @@ function formatNodeCapacity(node, capacity) {
     return 'Unlimited';
   }
 
-  if (node.data.kind === NODE_KINDS.DATABASE) {
-    return `${formatCompactNumber(capacity)} conn`;
+  return formatValueWithUnit(capacity, getNodeCapacityUnit(node.data.kind));
+}
+
+function getPressureCard(node, simulation) {
+  if (isBufferingNodeKind(node.data.kind)) {
+    return {
+      label: 'Backlog Growth',
+      value: formatValueWithUnit(simulation?.backlogRps ?? 0, getNodeCapacityUnit(node.data.kind)),
+    };
   }
 
-  return formatRps(capacity);
+  return {
+    label: 'Dropped Traffic',
+    value: formatRps(simulation?.rejectedRps ?? 0),
+  };
 }
 
 function InventoryButton({
@@ -57,6 +78,9 @@ function NodeEditor({
   const registry = COMPONENT_REGISTRY[node.data.kind];
   const simulation = node.data.simulation;
   const rejectedRps = simulation?.rejectedRps ?? 0;
+  const pressureCard = getPressureCard(node, simulation);
+  const backlogRps = simulation?.backlogRps ?? 0;
+  const isBufferingNode = isBufferingNodeKind(node.data.kind);
 
   return (
     <>
@@ -120,19 +144,28 @@ function NodeEditor({
           </p>
         </div>
         <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
-          <p className="text-sm text-slate-300">Dropped Traffic</p>
-          <p className="mt-2 font-display text-3xl text-white">{formatRps(rejectedRps)}</p>
+          <p className="text-sm text-slate-300">{pressureCard.label}</p>
+          <p className="mt-2 font-display text-3xl text-white">{pressureCard.value}</p>
         </div>
       </div>
 
       {simulation?.isBottleneck ? (
         <div className="mt-3 rounded-[18px] border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-100">
-          This node is receiving more traffic than it can safely process. Add capacity, scale the
-          tier out, or reduce the upstream request load.
+          {isBufferingNode
+            ? 'This node is ingesting more work than consumers can drain. Add throughput, add more consumers, or reduce the upstream publish rate.'
+            : 'This node is receiving more traffic than it can safely process. Add capacity, scale the tier out, or reduce the upstream request load.'}
         </div>
       ) : null}
 
-      {!simulation?.isBottleneck && rejectedRps > 0 ? (
+      {isBufferingNode && backlogRps > 0 ? (
+        <div className="mt-3 rounded-[18px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-100">
+          Incoming publish volume exceeds the configured throughput by{' '}
+          {formatValueWithUnit(backlogRps, getNodeCapacityUnit(node.data.kind))}. This represents
+          backlog growth in the current simulation window.
+        </div>
+      ) : null}
+
+      {!simulation?.isBottleneck && rejectedRps > 0 && !isBufferingNode ? (
         <div className="mt-3 rounded-[18px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-100">
           This node is still dropping {formatRps(rejectedRps)} because its estimated success rate is{' '}
           {formatPercent(simulation?.successProbability ?? 1)}.
@@ -195,7 +228,7 @@ function EdgeEditor({ edge, onDeleteSelection }) {
       <div>
         <h2 className="font-display text-2xl text-white">Connection</h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          Inspect the selected path and remove it if you want to rewire the request flow.
+          Inspect the selected path and remove it if you want to rewire the request or event flow.
         </p>
       </div>
 
@@ -281,8 +314,8 @@ export default function PropertyInspector({
             <div>
               <h2 className="font-display text-2xl text-white">Select a node or connection</h2>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Click components to tune latency, capacity, and failure settings. Click links to
-                inspect or remove them.
+                Click components to tune latency, throughput, capacity, retention, and failure
+                settings. Click links to inspect or remove them.
               </p>
             </div>
           )}
@@ -321,7 +354,7 @@ export default function PropertyInspector({
 
         <CollapsibleSection
           title="Links"
-          subtitle="Inspect or jump to the currently wired request paths."
+          subtitle="Inspect or jump to the currently wired request and event paths."
           meta={`${edges.length} links`}
           defaultOpen={false}
         >

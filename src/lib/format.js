@@ -23,6 +23,10 @@ export function formatRps(value) {
   return `${formatCompactNumber(value)} req/s`;
 }
 
+export function formatValueWithUnit(value, unit) {
+  return `${formatCompactNumber(value)} ${unit}`;
+}
+
 export function formatPercent(value) {
   return `${percentFormatter.format(value * 100)}%`;
 }

@@ -31,7 +31,8 @@ This project is intentionally stateless. A design lives entirely in the browser 
   - `2 Components`
   - `3 Components`
   - `4 Components`
-  - `Full Demo`
+  - `Async Pipeline`
+  - `Full Platform`
 - Connect nodes by dragging from the right output handle of one node to the left input handle of another.
 - Select nodes and edges directly on the canvas.
 - Clear the board, delete the selected node or connection, or duplicate the selected node.
@@ -42,27 +43,69 @@ This project is intentionally stateless. A design lives entirely in the browser 
 ### Supported components
 
 - `Client / Ingress`
-  - Traffic Pattern: `Constant`, `Spike`, `Sinusoidal`
-- `Load Balancer`
-  - Algorithm: `Round Robin`
-- `Web Server`
-  - Latency
-  - Capacity
-  - Failure Rate
-- `Database`
-  - Read Latency
-  - Write Latency
-  - Connection Limit
-- `Cache`
+  - Traffic Pattern
+  - Downstream Flow: split or broadcast
+- `CDN / Edge Cache`
   - Latency
   - Capacity
   - Hit Rate
+- `API Gateway`
+  - Latency
+  - Capacity
+  - Failure Rate
+  - Downstream Flow
+- `Load Balancer`
+  - Algorithm: `Round Robin`, `Least Connections`
+- `App Service`
+  - Latency
+  - Capacity
+  - Failure Rate
+  - Downstream Flow
+- `Async Worker`
+  - Processing Time
+  - Capacity
+  - Failure Rate
+  - Downstream Flow
+- `Queue`
+  - Enqueue Latency
+  - Throughput
+  - Retention
+  - Consumer Delivery
+- `Kafka / Event Bus`
+  - Ack Latency
+  - Partition Count
+  - Per-Partition Capacity
+  - Replication Factor
+  - Consumer Groups
+- `Redis Cache`
+  - Latency
+  - Capacity
+  - Hit Rate
+- `SQL Database`
+  - Read Latency
+  - Write Latency
+  - Connection Limit
+- `NoSQL Store`
+  - Read Latency
+  - Write Latency
+  - Capacity
+  - Consistency
+- `Search Index`
+  - Query Latency
+  - Indexing Latency
+  - Capacity
+- `Object Storage`
+  - Put/Get Latency
+  - Capacity
+  - Storage Class
 
 ### Simulation behavior
 
 - Uses a breadth-first traversal to move requests from `Client / Ingress` nodes through connected edges.
 - Applies cumulative latency and success probability at each hop.
-- Simulates load balancer fan-out with round robin routing.
+- Supports both split routing and broadcast fan-out on multi-output nodes.
+- Simulates load balancer fan-out with configurable distribution strategy labels.
+- Surfaces backlog pressure for buffering tiers like queues and Kafka.
 - Animates request pulses along edges with `requestAnimationFrame`.
 - Highlights bottlenecks when live traffic exceeds node capacity.
 - Shows live analytics for:
@@ -152,8 +195,9 @@ npm.cmd run preview
 
 - Use `2 Components` for quick smoke tests.
 - Use `3 Components` for a basic client -> app -> database path.
-- Use `4 Components` for a more realistic ingress -> LB -> app -> DB flow.
-- Use `Full Demo` for scale-out plus cache behavior.
+- Use `4 Components` for a more realistic ingress -> gateway -> LB -> app flow.
+- Use `Async Pipeline` for queue-backed workers.
+- Use `Full Platform` for a modern stack with CDN, Kafka, workers, search, and object storage.
 
 ### Sharing a design
 
@@ -183,12 +227,13 @@ src/
 - The simulator is intentionally client-side only.
 - Metrics are heuristic and educational, not infrastructure-grade benchmarking.
 - Sharing is URL-based rather than persisted server-side.
-- The current routing model focuses on directional flow and round robin behavior rather than full protocol-level realism.
+- The routing model now supports split and broadcast flow, but still remains a heuristic rather than a protocol-accurate execution engine.
+- Cache hit rate, queue retention, replication, and storage class are visual and reliability hints today rather than full queue-depth or storage-cost simulations.
 
 ## Next Useful Directions
 
 - Per-edge latency and packet loss configuration
 - Cache hit/miss impact on downstream database traffic
-- Custom node types such as queues, async workers, and message brokers
 - Scenario playback and saved traffic presets
 - More advanced analytics and comparison between two topologies
+- Node grouping, swimlanes, or region-based deployment zones

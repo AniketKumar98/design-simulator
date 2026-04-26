@@ -18,6 +18,7 @@ import PropertyInspector from './components/PropertyInspector';
 import TrafficEdge from './components/edges/TrafficEdge';
 import ArchitectureNode from './components/nodes/ArchitectureNode';
 import {
+  ASYNC_NODE_KINDS,
   COMPONENT_REGISTRY,
   createNode,
   getDefaultGraph,
@@ -25,6 +26,7 @@ import {
   getStarterGraph,
   NODE_KINDS,
   RF_EDGE_TYPE,
+  STATEFUL_NODE_KINDS,
   STARTER_TOPOLOGIES,
   TRAFFIC_LIMITS,
 } from './constants';
@@ -40,20 +42,7 @@ const edgeTypes = {
 };
 
 function getMiniMapColor(node) {
-  switch (node.data?.kind) {
-    case NODE_KINDS.CLIENT:
-      return '#5de2e7';
-    case NODE_KINDS.LOAD_BALANCER:
-      return '#ffb44f';
-    case NODE_KINDS.WEB_SERVER:
-      return '#7be495';
-    case NODE_KINDS.DATABASE:
-      return '#ff8f72';
-    case NODE_KINDS.CACHE:
-      return '#7ce7d2';
-    default:
-      return '#b0ccc5';
-  }
+  return COMPONENT_REGISTRY[node.data?.kind]?.mapColor ?? '#b0ccc5';
 }
 
 function isEditableTarget(target) {
@@ -85,9 +74,8 @@ function buildTopologyStats(nodes, edges) {
 
   const orphanCount = nodes.filter((node) => (inbound[node.id] ?? 0) + (outbound[node.id] ?? 0) === 0).length;
   const ingressCount = nodes.filter((node) => node.data.kind === NODE_KINDS.CLIENT).length;
-  const dataStoreCount = nodes.filter((node) => (
-    node.data.kind === NODE_KINDS.DATABASE || node.data.kind === NODE_KINDS.CACHE
-  )).length;
+  const statefulCount = nodes.filter((node) => STATEFUL_NODE_KINDS.includes(node.data.kind)).length;
+  const asyncCount = nodes.filter((node) => ASYNC_NODE_KINDS.includes(node.data.kind)).length;
   const warnings = [];
 
   if (nodes.length === 0) {
@@ -107,11 +95,12 @@ function buildTopologyStats(nodes, edges) {
   }
 
   return {
-    dataStoreCount,
+    asyncCount,
     edgeCount: edges.length,
     ingressCount,
     nodeCount: nodes.length,
     orphanCount,
+    statefulCount,
     warnings,
   };
 }
@@ -125,8 +114,8 @@ function EmptyCanvasState({ onAddComponent, onLoadStarter }) {
         </p>
         <h2 className="mt-2 font-display text-3xl text-white">Start with a tiny topology</h2>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-          Build small tests first, then scale them out. You can add components one by one or load a
-          starter layout for a 2-node, 3-node, 4-node, or full-stack simulation.
+          Start with a tiny flow, then grow it into a real platform with queues, Kafka, workers,
+          and storage layers. You can add components one by one or load a starter layout.
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -156,7 +145,14 @@ function EmptyCanvasState({ onAddComponent, onLoadStarter }) {
             onClick={() => onAddComponent(NODE_KINDS.WEB_SERVER)}
             className="rounded-full border border-amber-300/20 bg-amber-300/10 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-200/35 hover:bg-amber-300/15"
           >
-            Add Web Server
+            Add App Service
+          </button>
+          <button
+            type="button"
+            onClick={() => onAddComponent(NODE_KINDS.QUEUE)}
+            className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-4 py-2 text-sm font-semibold text-fuchsia-100 transition hover:border-fuchsia-200/35 hover:bg-fuchsia-300/15"
+          >
+            Add Queue
           </button>
         </div>
       </div>
@@ -474,11 +470,11 @@ function SimulatorWorkspace() {
                 ArchitectSim Web
               </p>
               <h1 className="mt-2 font-display text-3xl text-white">
-                Browser-native system design simulator
+                Browser-native distributed system simulator
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Build tiny flows first, connect services like a diagramming board, then drive live
-                request traffic through the design to expose bottlenecks.
+                Model real production topologies with gateways, queues, Kafka, caches, workers,
+                search, and storage, then drive live traffic through the graph to expose bottlenecks.
               </p>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-0 md:justify-end">

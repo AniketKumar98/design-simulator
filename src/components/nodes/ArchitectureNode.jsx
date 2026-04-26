@@ -2,19 +2,69 @@ import { Flame } from 'lucide-react';
 import { Handle, Position } from '@xyflow/react';
 import {
   COMPONENT_REGISTRY,
+  getNodeCapacity,
+  getNodeCapacityUnit,
+  getRoutingModeLabel,
   getTrafficPatternLabel,
   NODE_KINDS,
 } from '../../constants';
-import { formatCompactNumber, formatPercent, formatRps } from '../../lib/format';
+import {
+  formatCompactNumber,
+  formatPercent,
+  formatRps,
+  formatValueWithUnit,
+} from '../../lib/format';
+
+function formatNodeCapacityValue(node) {
+  const capacity = getNodeCapacity(node);
+  const unit = getNodeCapacityUnit(node.data.kind);
+
+  if (!Number.isFinite(capacity)) {
+    return 'Unlimited';
+  }
+
+  return formatValueWithUnit(capacity, unit);
+}
+
+function formatEnumValue(value) {
+  return value
+    .split(/[-_]/)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
+function getFlowFact(data, simulation) {
+  if ((data.outgoingCount ?? 0) > 1 && data.config.routingMode) {
+    return { label: 'Flow', value: getRoutingModeLabel(data.config.routingMode) };
+  }
+
+  return { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) };
+}
 
 function getFacts(data, simulation) {
   const config = data.config;
+  const baseNode = { data };
+  const flowFact = getFlowFact(data, simulation);
 
   switch (data.kind) {
     case NODE_KINDS.CLIENT:
       return [
         { label: 'Pattern', value: getTrafficPatternLabel(config.trafficPattern) },
-        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
+        flowFact,
+      ];
+    case NODE_KINDS.CDN:
+      return [
+        { label: 'Latency', value: `${config.latencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Hit Rate', value: `${config.hitRate}%` },
+        flowFact,
+      ];
+    case NODE_KINDS.API_GATEWAY:
+      return [
+        { label: 'Latency', value: `${config.latencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Failure', value: `${config.failureRate}%` },
+        flowFact,
       ];
     case NODE_KINDS.LOAD_BALANCER:
       return [
@@ -24,22 +74,64 @@ function getFacts(data, simulation) {
     case NODE_KINDS.WEB_SERVER:
       return [
         { label: 'Latency', value: `${config.latencyMs} ms` },
-        { label: 'Capacity', value: formatRps(config.capacityRps) },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
         { label: 'Failure', value: `${config.failureRate}%` },
-        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
+        flowFact,
+      ];
+    case NODE_KINDS.WORKER:
+      return [
+        { label: 'Process', value: `${config.latencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Failure', value: `${config.failureRate}%` },
+        flowFact,
+      ];
+    case NODE_KINDS.QUEUE:
+      return [
+        { label: 'Enqueue', value: `${config.latencyMs} ms` },
+        { label: 'Throughput', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Retention', value: `${config.retentionHours} hr` },
+        flowFact,
+      ];
+    case NODE_KINDS.KAFKA:
+      return [
+        { label: 'Ack', value: `${config.ackLatencyMs} ms` },
+        { label: 'Partitions', value: `${config.partitionCount}` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        flowFact,
       ];
     case NODE_KINDS.DATABASE:
       return [
         { label: 'Read', value: `${config.readLatencyMs} ms` },
         { label: 'Write', value: `${config.writeLatencyMs} ms` },
-        { label: 'Conn', value: formatCompactNumber(config.connectionLimit) },
+        { label: 'Conn', value: formatValueWithUnit(config.connectionLimit, 'conn') },
         { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
+      ];
+    case NODE_KINDS.NOSQL:
+      return [
+        { label: 'Read', value: `${config.readLatencyMs} ms` },
+        { label: 'Write', value: `${config.writeLatencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Consistency', value: formatEnumValue(config.consistency) },
       ];
     case NODE_KINDS.CACHE:
       return [
         { label: 'Latency', value: `${config.latencyMs} ms` },
-        { label: 'Capacity', value: formatRps(config.capacityRps) },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
         { label: 'Hit Rate', value: `${config.hitRate}%` },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
+      ];
+    case NODE_KINDS.OBJECT_STORAGE:
+      return [
+        { label: 'Latency', value: `${config.latencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
+        { label: 'Class', value: formatEnumValue(config.storageClass) },
+        { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
+      ];
+    case NODE_KINDS.SEARCH_INDEX:
+      return [
+        { label: 'Query', value: `${config.queryLatencyMs} ms` },
+        { label: 'Index', value: `${config.indexLatencyMs} ms` },
+        { label: 'Capacity', value: formatNodeCapacityValue(baseNode) },
         { label: 'Live Load', value: formatRps(simulation?.loadRps ?? 0) },
       ];
     default:

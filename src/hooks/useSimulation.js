@@ -2,14 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getNodeCapacity,
   getNodeLatency,
+  getNodeCapacityUnit,
+  getNodeRoutingMode,
   getNodeSuccessProbability,
   getTrafficMultiplier,
+  isBufferingNodeKind,
   NODE_KINDS,
 } from '../constants';
 import {
   formatPercent,
   formatRps,
   formatUtilization,
+  formatValueWithUnit,
 } from '../lib/format';
 
 const SNAPSHOT_INTERVAL_MS = 260;
@@ -25,11 +29,14 @@ function buildIdleState(nodes, edges) {
     const capacity = getNodeCapacity(node);
 
     nodeMetrics[node.id] = {
+      backlogRps: 0,
       capacity,
       isBottleneck: false,
       latencyMs: getNodeLatency(node),
       loadRatio: 0,
       loadRps: 0,
+      outputRatio: getNodeSuccessProbability(node, 0),
+      processedRps: 0,
       rejectedRps: 0,
       successProbability: getNodeSuccessProbability(node, 0),
     };
@@ -112,6 +119,16 @@ function getPulseDuration(cumulativeLatency) {
   return Math.min(1750, Math.max(280, 1600 - cumulativeLatency * 6));
 }
 
+function getOutgoingEdgeFlow(node, flowRps, outgoingCount) {
+  if (outgoingCount <= 0 || flowRps <= 0) {
+    return 0;
+  }
+
+  return getNodeRoutingMode(node) === 'broadcast'
+    ? flowRps
+    : flowRps / outgoingCount;
+}
+
 function computeRawFlows(graph, globalRps, elapsedSeconds) {
   const nodeInputRps = {};
   const edgeRps = {};
@@ -145,23 +162,24 @@ function computeRawFlows(graph, globalRps, elapsedSeconds) {
 
   while (queue.length > 0) {
     const current = queue.shift();
+    const currentNode = graph.nodeMap[current.nodeId];
     const outgoingEdges = graph.adjacency[current.nodeId] ?? [];
 
     if (outgoingEdges.length === 0 || current.flowRps <= 0) {
       continue;
     }
 
-    const splitFlow = current.flowRps / outgoingEdges.length;
+    const flowPerEdge = getOutgoingEdgeFlow(currentNode, current.flowRps, outgoingEdges.length);
 
     outgoingEdges.forEach((edge) => {
-      if (current.visited.has(edge.target)) {
+      if (current.visited.has(edge.target) || flowPerEdge <= 0) {
         return;
       }
 
-      edgeRps[edge.id] = (edgeRps[edge.id] ?? 0) + splitFlow;
-      nodeInputRps[edge.target] = (nodeInputRps[edge.target] ?? 0) + splitFlow;
+      edgeRps[edge.id] = (edgeRps[edge.id] ?? 0) + flowPerEdge;
+      nodeInputRps[edge.target] = (nodeInputRps[edge.target] ?? 0) + flowPerEdge;
       queue.push({
-        flowRps: splitFlow,
+        flowRps: flowPerEdge,
         nodeId: edge.target,
         visited: cloneVisited(current.visited, edge.target),
       });
@@ -183,23 +201,32 @@ function buildNodeMetrics(nodes, nodeInputRps) {
     const capacity = getNodeCapacity(node);
     const loadRps = nodeInputRps[node.id] ?? 0;
     const finiteCapacity = Number.isFinite(capacity);
+    const acceptedRps = finiteCapacity ? Math.min(loadRps, Math.max(capacity, 0)) : loadRps;
     const loadRatio = finiteCapacity ? loadRps / Math.max(capacity, 1) : 0;
-    const successProbability = getNodeSuccessProbability(node, loadRatio);
-    const rejectedRps = loadRps * (1 - successProbability);
+    const serviceSuccessProbability = getNodeSuccessProbability(node, loadRatio);
+    const processedRps = acceptedRps * serviceSuccessProbability;
+    const rejectedRps = Math.max(0, loadRps - processedRps);
+    const outputRatio = loadRps > 0 ? processedRps / loadRps : serviceSuccessProbability;
     const isBottleneck = finiteCapacity && loadRps > capacity;
+    const backlogRps = finiteCapacity && isBufferingNodeKind(node.data.kind)
+      ? Math.max(0, loadRps - acceptedRps)
+      : 0;
 
     if (isBottleneck) {
       bottleneckCount += 1;
     }
 
     metrics[node.id] = {
+      backlogRps,
       capacity,
       isBottleneck,
       latencyMs: getNodeLatency(node),
       loadRatio,
       loadRps,
+      outputRatio,
+      processedRps,
       rejectedRps,
-      successProbability,
+      successProbability: outputRatio,
     };
   });
 
@@ -240,10 +267,10 @@ function computeOutcomeFlows(graph, nodeMetrics, clientSourceRps) {
       continue;
     }
 
-    const splitOutput = current.outputRps / outgoingEdges.length;
+    const flowPerEdge = getOutgoingEdgeFlow(currentNode, current.outputRps, outgoingEdges.length);
 
     outgoingEdges.forEach((edge) => {
-      if (current.visited.has(edge.target) || splitOutput <= 0) {
+      if (current.visited.has(edge.target) || flowPerEdge <= 0) {
         return;
       }
 
@@ -253,12 +280,12 @@ function computeOutcomeFlows(graph, nodeMetrics, clientSourceRps) {
         return;
       }
 
-      const successfulOutput = splitOutput * targetMetric.successProbability;
-      const failedAtTarget = splitOutput - successfulOutput;
+      const successfulOutput = flowPerEdge * (targetMetric.outputRatio ?? targetMetric.successProbability);
+      const failedAtTarget = flowPerEdge - successfulOutput;
       const nextLatency = current.cumulativeLatency + targetMetric.latencyMs;
 
       edgeSuccessOutputRps[edge.id] = (edgeSuccessOutputRps[edge.id] ?? 0) + successfulOutput;
-      edgeLatencyTotals[edge.id] = (edgeLatencyTotals[edge.id] ?? 0) + nextLatency * splitOutput;
+      edgeLatencyTotals[edge.id] = (edgeLatencyTotals[edge.id] ?? 0) + nextLatency * flowPerEdge;
 
       if (failedAtTarget > 0) {
         failureRps += failedAtTarget;
@@ -314,9 +341,19 @@ function buildAlerts(nodes, graph, nodeMetrics) {
 
     const incomingCount = graph.incomingCounts[node.id] ?? 0;
 
+    if (isBufferingNodeKind(node.data.kind) && metric.backlogRps > 0) {
+      alerts.push({
+        detail: `${formatValueWithUnit(metric.backlogRps, getNodeCapacityUnit(node.data.kind))} is accumulating faster than this tier can drain.${incomingCount > 1 ? ` Traffic from ${incomingCount} upstream paths is converging here.` : ''}`,
+        id: `${node.id}-backlog`,
+        severity: metric.loadRatio > 1.5 ? 'critical' : 'warning',
+        title: `${node.data.label} is building backlog`,
+      });
+      return;
+    }
+
     if (metric.isBottleneck) {
       alerts.push({
-        detail: `${formatRps(metric.loadRps)} is landing on a ${formatRps(metric.capacity)} ceiling (${formatUtilization(metric.loadRatio)} utilization).${incomingCount > 1 ? ` Traffic from ${incomingCount} upstream paths is converging here.` : ''}`,
+        detail: `${formatRps(metric.loadRps)} is landing on a ${formatValueWithUnit(metric.capacity, getNodeCapacityUnit(node.data.kind))} ceiling (${formatUtilization(metric.loadRatio)} utilization).${incomingCount > 1 ? ` Traffic from ${incomingCount} upstream paths is converging here.` : ''}`,
         id: `${node.id}-capacity`,
         severity: metric.loadRatio > 1.5 ? 'critical' : 'warning',
         title: `${node.data.label} is overloaded`,
