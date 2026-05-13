@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight, LayoutTemplate, Shapes } from 'lucide-react';
 import { useState } from 'react';
 import { COMPONENT_REGISTRY, SIDEBAR_COMPONENTS, STARTER_TOPOLOGIES } from '../constants';
 
@@ -31,36 +32,91 @@ function PaletteItem({ kind, onAddComponent }) {
   );
 }
 
-export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
+export default function ComponentPalette({
+  isOpen,
+  onAddComponent,
+  onLoadStarter,
+  onOpenChange,
+}) {
   const [isStarterMenuOpen, setIsStarterMenuOpen] = useState(false);
 
+  function handleTogglePalette() {
+    onOpenChange(!isOpen);
+
+    if (isOpen) {
+      setIsStarterMenuOpen(false);
+    }
+  }
+
   return (
-    <div className="absolute left-4 top-24 z-40 flex max-h-[calc(100vh-8rem)] w-56 flex-col gap-3">
-      <div className="pointer-events-auto rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl">
+    <div className="absolute left-4 top-24 z-40 flex items-start gap-3">
+      <div className="pointer-events-auto flex w-52 flex-col gap-2">
+        <button
+          type="button"
+          onClick={handleTogglePalette}
+          className="flex items-center gap-3 rounded-[24px] border border-slate-700/80 bg-slate-900/82 px-3 py-3 text-left shadow-2xl shadow-black/35 backdrop-blur-xl transition hover:border-slate-500/80 hover:bg-slate-900/92"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-slate-950/70 text-cyan-100">
+            <Shapes size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-white">Components</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              {isOpen ? 'hide rack' : 'open to drag or click'}
+            </div>
+          </div>
+          {isOpen ? (
+            <ChevronLeft size={16} className="text-slate-300" />
+          ) : (
+            <ChevronRight size={16} className="text-slate-300" />
+          )}
+        </button>
+
+        {!isOpen ? (
+          <div className="rounded-[22px] border border-slate-700/70 bg-slate-900/68 px-3 py-3 text-xs leading-5 text-slate-300 shadow-xl shadow-black/25 backdrop-blur-xl">
+            Open the component rack, then drag a service onto the canvas or click one to place it.
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className={`pointer-events-auto w-56 rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl transition-all duration-200 ${
+          isOpen
+            ? 'translate-x-0 opacity-100'
+            : '-translate-x-6 opacity-0 pointer-events-none'
+        }`}
+      >
         <div className="mb-3 px-1">
           <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-cyan-200/70">
-            Components
+            Component Rack
           </p>
+          <p className="mt-1 text-xs text-slate-400">Drag onto the canvas or click to place.</p>
         </div>
         <div className="soft-scrollbar flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto pr-1">
           {SIDEBAR_COMPONENTS.map((kind) => (
             <PaletteItem key={kind} kind={kind} onAddComponent={onAddComponent} />
           ))}
         </div>
-      </div>
 
-      <div className="pointer-events-auto relative">
-        <button
-          type="button"
-          title="Starter topologies"
-          onClick={() => setIsStarterMenuOpen((current) => !current)}
-          className="w-full rounded-full border border-slate-700/80 bg-slate-900/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-200 shadow-xl shadow-black/30 backdrop-blur-xl transition hover:border-slate-500/80 hover:bg-slate-900/90"
-        >
-          Presets
-        </button>
+        <div className="mt-3 border-t border-white/8 pt-3">
+          <button
+            type="button"
+            title="Starter topologies"
+            onClick={() => setIsStarterMenuOpen((current) => !current)}
+            className="flex w-full items-center justify-between rounded-full border border-slate-700/80 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-200 transition hover:border-slate-500/80 hover:bg-slate-900/90"
+          >
+            <span className="flex items-center gap-2">
+              <LayoutTemplate size={14} />
+              Presets
+            </span>
+            {isStarterMenuOpen ? <ChevronLeft size={14} className="-rotate-90" /> : <ChevronRight size={14} className="rotate-90" />}
+          </button>
 
-        {isStarterMenuOpen ? (
-          <div className="absolute bottom-full left-0 mb-3 w-full max-h-[40vh] overflow-y-auto rounded-[24px] border border-slate-700/80 bg-slate-900/88 p-2 shadow-2xl shadow-black/35 backdrop-blur-xl">
+          {isStarterMenuOpen ? (
+            <div className="mt-2 max-h-[32vh] overflow-y-auto rounded-[24px] border border-slate-700/80 bg-slate-900/70 p-2">
+              <p className="px-2 pb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                Starter Topologies
+              </p>
             {STARTER_TOPOLOGIES.map((topology) => (
               <button
                 key={topology.id}
@@ -74,8 +130,9 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
                 {topology.label}
               </button>
             ))}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

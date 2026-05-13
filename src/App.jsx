@@ -55,15 +55,28 @@ function isEditableTarget(target) {
   );
 }
 
-function EmptyCanvasState({ onAddComponent, onLoadStarter }) {
+function EmptyCanvasState({ onAddComponent, onLoadStarter, onOpenPalette }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
       <div className="pointer-events-auto w-full max-w-md rounded-[30px] border border-slate-700/80 bg-slate-900/76 p-5 shadow-2xl shadow-black/35 backdrop-blur-xl">
         <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">
           Canvas Ready
         </p>
-        <h2 className="mt-2 font-display text-2xl text-white">Drop a component to begin</h2>
-        <p className="mt-2 text-sm text-slate-400">Or start from a tiny preset.</p>
+        <h2 className="mt-2 font-display text-2xl text-white">Start from the canvas</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Open the component rack on the left, then drag a node onto the canvas or click one to
+          place it instantly.
+        </p>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={onOpenPalette}
+            className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/35 hover:bg-cyan-300/15"
+          >
+            Open Components
+          </button>
+        </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {STARTER_TOPOLOGIES.map((topology) => (
@@ -114,6 +127,7 @@ function SimulatorWorkspace() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [globalRps, setGlobalRps] = useState(TRAFFIC_LIMITS.defaultRps);
   const [copyFeedback, setCopyFeedback] = useState('');
 
@@ -490,6 +504,7 @@ function SimulatorWorkspace() {
         <EmptyCanvasState
           onAddComponent={handleAddComponent}
           onLoadStarter={handleLoadStarter}
+          onOpenPalette={() => setIsPaletteOpen(true)}
         />
       ) : null}
 
@@ -504,8 +519,10 @@ function SimulatorWorkspace() {
           setGlobalRps={setGlobalRps}
         />
         <ComponentPalette
+          isOpen={isPaletteOpen}
           onAddComponent={handleAddComponent}
           onLoadStarter={handleLoadStarter}
+          onOpenChange={setIsPaletteOpen}
         />
         <PropertyInspector
           edge={selectedEdge}
