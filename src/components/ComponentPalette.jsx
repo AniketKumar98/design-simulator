@@ -60,7 +60,7 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
         </button>
 
         {isStarterMenuOpen ? (
-          <div className="absolute left-full top-0 ml-3 w-56 rounded-[24px] border border-slate-700/80 bg-slate-900/88 p-2 shadow-2xl shadow-black/35 backdrop-blur-xl">
+          <div className="absolute bottom-full left-0 mb-3 w-full max-h-[40vh] overflow-y-auto rounded-[24px] border border-slate-700/80 bg-slate-900/88 p-2 shadow-2xl shadow-black/35 backdrop-blur-xl">
             {STARTER_TOPOLOGIES.map((topology) => (
               <button
                 key={topology.id}
