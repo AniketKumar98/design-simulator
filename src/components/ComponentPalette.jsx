@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, LayoutTemplate, Shapes } from 'lucide-react';
+import { ChevronDown, LayoutTemplate, Shapes } from 'lucide-react';
 import { useState } from 'react';
 import { COMPONENT_REGISTRY, SIDEBAR_COMPONENTS, STARTER_TOPOLOGIES } from '../constants';
 
@@ -49,7 +49,7 @@ export default function ComponentPalette({
   }
 
   return (
-    <div className="absolute left-4 top-24 z-40 flex items-start gap-3">
+    <div className="absolute left-4 top-24 z-40 w-56">
       <div className="pointer-events-auto flex w-52 flex-col gap-2">
         <button
           type="button"
@@ -65,11 +65,10 @@ export default function ComponentPalette({
               {isOpen ? 'hide rack' : 'open to drag or click'}
             </div>
           </div>
-          {isOpen ? (
-            <ChevronLeft size={16} className="text-slate-300" />
-          ) : (
-            <ChevronRight size={16} className="text-slate-300" />
-          )}
+          <ChevronDown
+            size={16}
+            className={`text-slate-300 transition ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+          />
         </button>
 
         {!isOpen ? (
@@ -80,10 +79,10 @@ export default function ComponentPalette({
       </div>
 
       <div
-        className={`pointer-events-auto w-56 rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl transition-all duration-200 ${
+        className={`pointer-events-auto mt-3 w-56 overflow-hidden rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl transition-all duration-200 ${
           isOpen
-            ? 'translate-x-0 opacity-100'
-            : '-translate-x-6 opacity-0 pointer-events-none'
+            ? 'max-h-[calc(100vh-12rem)] translate-y-0 opacity-100'
+            : 'pointer-events-none max-h-0 -translate-y-2 border-transparent p-0 opacity-0'
         }`}
       >
         <div className="mb-3 px-1">
@@ -109,7 +108,10 @@ export default function ComponentPalette({
               <LayoutTemplate size={14} />
               Presets
             </span>
-            {isStarterMenuOpen ? <ChevronLeft size={14} className="-rotate-90" /> : <ChevronRight size={14} className="rotate-90" />}
+            <ChevronDown
+              size={14}
+              className={`transition ${isStarterMenuOpen ? 'rotate-180' : 'rotate-0'}`}
+            />
           </button>
 
           {isStarterMenuOpen ? (
@@ -117,19 +119,19 @@ export default function ComponentPalette({
               <p className="px-2 pb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
                 Starter Topologies
               </p>
-            {STARTER_TOPOLOGIES.map((topology) => (
-              <button
-                key={topology.id}
-                type="button"
-                onClick={() => {
-                  onLoadStarter(topology.id);
-                  setIsStarterMenuOpen(false);
-                }}
-                className="w-full rounded-2xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/8"
-              >
-                {topology.label}
-              </button>
-            ))}
+              {STARTER_TOPOLOGIES.map((topology) => (
+                <button
+                  key={topology.id}
+                  type="button"
+                  onClick={() => {
+                    onLoadStarter(topology.id);
+                    setIsStarterMenuOpen(false);
+                  }}
+                  className="w-full rounded-2xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/8"
+                >
+                  {topology.label}
+                </button>
+              ))}
             </div>
           ) : null}
         </div>
