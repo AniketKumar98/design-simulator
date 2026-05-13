@@ -1,120 +1,72 @@
-import { Plus } from 'lucide-react';
-import {
-  COMPONENT_GROUPS,
-  COMPONENT_REGISTRY,
-  SIDEBAR_COMPONENTS,
-  STARTER_TOPOLOGIES,
-} from '../constants';
-import CollapsibleSection from './CollapsibleSection';
+import { useState } from 'react';
+import { COMPONENT_REGISTRY, SIDEBAR_COMPONENTS, STARTER_TOPOLOGIES } from '../constants';
+
+function PaletteItem({ kind, onAddComponent }) {
+  const registry = COMPONENT_REGISTRY[kind];
+  const Icon = registry.icon;
+
+  return (
+    <button
+      type="button"
+      draggable
+      title={`${registry.label} - click or drag`}
+      onClick={() => onAddComponent(kind)}
+      onDragStart={(event) => {
+        event.dataTransfer.setData('application/architectsim-node', kind);
+        event.dataTransfer.effectAllowed = 'move';
+      }}
+      className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/65 text-white transition hover:-translate-y-0.5 hover:border-cyan-300/45 hover:bg-slate-900/90"
+    >
+      <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${registry.accent} opacity-15`} />
+      <Icon size={18} strokeWidth={2.2} className="relative z-10 text-white" />
+      <span className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-full border border-slate-700/80 bg-slate-950/92 px-3 py-1.5 text-xs font-medium text-slate-100 opacity-0 shadow-xl shadow-black/30 backdrop-blur-md transition group-hover:opacity-100">
+        {registry.shortLabel}
+      </span>
+    </button>
+  );
+}
 
 export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
+  const [isStarterMenuOpen, setIsStarterMenuOpen] = useState(false);
+
   return (
-    <section className="glass-panel panel-edge flex h-full flex-col rounded-[28px] p-5 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)]">
-      <div className="mb-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.34em] text-cyan-200/70">
-          Component Rack
-        </p>
-        <h2 className="mt-2 font-display text-2xl text-white">
-          Build modern system designs with real platform primitives
-        </h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300">
-          Sketch sync APIs, queues, Kafka backbones, workers, SQL, NoSQL, search, and blob
-          storage without leaving the canvas.
-        </p>
+    <div className="absolute left-4 top-24 z-40 flex max-h-[calc(100vh-8rem)] flex-col gap-3">
+      <div className="pointer-events-auto rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl">
+        <div className="soft-scrollbar flex max-h-[calc(100vh-12rem)] flex-col gap-2 overflow-y-auto pr-1">
+          {SIDEBAR_COMPONENTS.map((kind) => (
+            <PaletteItem key={kind} kind={kind} onAddComponent={onAddComponent} />
+          ))}
+        </div>
       </div>
 
-      <div className="soft-scrollbar flex-1 space-y-4 overflow-y-auto pr-1">
-        <CollapsibleSection
-          title="Quick Start"
-          subtitle="Load a ready-made flow, from a tiny smoke test to a modern event-driven platform."
-          meta={`${STARTER_TOPOLOGIES.length} presets`}
+      <div className="pointer-events-auto relative">
+        <button
+          type="button"
+          title="Starter topologies"
+          onClick={() => setIsStarterMenuOpen((current) => !current)}
+          className="rounded-full border border-slate-700/80 bg-slate-900/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-200 shadow-xl shadow-black/30 backdrop-blur-xl transition hover:border-slate-500/80 hover:bg-slate-900/90"
         >
-          <div className="space-y-2">
+          Presets
+        </button>
+
+        {isStarterMenuOpen ? (
+          <div className="absolute left-full top-0 ml-3 w-56 rounded-[24px] border border-slate-700/80 bg-slate-900/88 p-2 shadow-2xl shadow-black/35 backdrop-blur-xl">
             {STARTER_TOPOLOGIES.map((topology) => (
               <button
                 key={topology.id}
                 type="button"
-                onClick={() => onLoadStarter(topology.id)}
-                className="w-full rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
+                onClick={() => {
+                  onLoadStarter(topology.id);
+                  setIsStarterMenuOpen(false);
+                }}
+                className="w-full rounded-2xl px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/8"
               >
-                <div className="font-display text-sm text-white">{topology.label}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-400">{topology.description}</div>
+                {topology.label}
               </button>
             ))}
           </div>
-        </CollapsibleSection>
-
-        {COMPONENT_GROUPS.map((group, index) => (
-          <CollapsibleSection
-            key={group.id}
-            title={group.title}
-            subtitle={group.subtitle}
-            meta={`${group.kinds.length} types`}
-            defaultOpen={index === 0}
-          >
-            <div className="space-y-3">
-              {group.kinds.map((kind) => {
-                const registry = COMPONENT_REGISTRY[kind];
-                const Icon = registry.icon;
-
-                return (
-                  <div
-                    key={kind}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData('application/architectsim-node', kind);
-                      event.dataTransfer.effectAllowed = 'move';
-                    }}
-                    className="group relative w-full overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/35 p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/40 hover:bg-slate-900/55"
-                  >
-                    <div
-                      className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${registry.accent} opacity-75`}
-                    />
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`mt-1 flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${registry.accent} text-slate-950 shadow-lg shadow-black/20`}
-                      >
-                        <Icon size={20} strokeWidth={2.25} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-display text-base text-white">{registry.shortLabel}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-300">
-                              Drag
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onAddComponent(kind)}
-                              className="flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:border-cyan-200/35 hover:bg-cyan-300/15"
-                            >
-                              <Plus size={12} />
-                              Add
-                            </button>
-                          </div>
-                        </div>
-                        <p className="mt-1 text-sm leading-5 text-slate-300">{registry.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CollapsibleSection>
-        ))}
-
-        <CollapsibleSection
-          title="Connect Nodes"
-          subtitle="Wire request paths, async handoffs, and fan-out relationships just like a design board."
-          meta={`${SIDEBAR_COMPONENTS.length} total`}
-          defaultOpen={false}
-        >
-          <p className="text-sm leading-6 text-slate-300">
-            Drag from the amber dot on a component's right side to the cyan dot on another
-            component's left side.
-          </p>
-        </CollapsibleSection>
+        ) : null}
       </div>
-    </section>
+    </div>
   );
 }
