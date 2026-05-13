@@ -15,13 +15,18 @@ function PaletteItem({ kind, onAddComponent }) {
         event.dataTransfer.setData('application/architectsim-node', kind);
         event.dataTransfer.effectAllowed = 'move';
       }}
-      className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-950/65 text-white transition hover:-translate-y-0.5 hover:border-cyan-300/45 hover:bg-slate-900/90"
+      className="group relative flex w-full items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-950/65 px-3 py-2.5 text-left text-white transition hover:-translate-y-0.5 hover:border-cyan-300/45 hover:bg-slate-900/90"
     >
       <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${registry.accent} opacity-15`} />
-      <Icon size={18} strokeWidth={2.2} className="relative z-10 text-white" />
-      <span className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-full border border-slate-700/80 bg-slate-950/92 px-3 py-1.5 text-xs font-medium text-slate-100 opacity-0 shadow-xl shadow-black/30 backdrop-blur-md transition group-hover:opacity-100">
-        {registry.shortLabel}
-      </span>
+      <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-slate-900/75">
+        <Icon size={17} strokeWidth={2.2} className="text-white" />
+      </div>
+      <div className="relative z-10 min-w-0">
+        <div className="truncate text-sm font-semibold text-white">{registry.shortLabel}</div>
+        <div className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          drag or click
+        </div>
+      </div>
     </button>
   );
 }
@@ -30,9 +35,14 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
   const [isStarterMenuOpen, setIsStarterMenuOpen] = useState(false);
 
   return (
-    <div className="absolute left-4 top-24 z-40 flex max-h-[calc(100vh-8rem)] flex-col gap-3">
+    <div className="absolute left-4 top-24 z-40 flex max-h-[calc(100vh-8rem)] w-56 flex-col gap-3">
       <div className="pointer-events-auto rounded-[28px] border border-slate-700/80 bg-slate-900/78 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl">
-        <div className="soft-scrollbar flex max-h-[calc(100vh-12rem)] flex-col gap-2 overflow-y-auto pr-1">
+        <div className="mb-3 px-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-cyan-200/70">
+            Components
+          </p>
+        </div>
+        <div className="soft-scrollbar flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto pr-1">
           {SIDEBAR_COMPONENTS.map((kind) => (
             <PaletteItem key={kind} kind={kind} onAddComponent={onAddComponent} />
           ))}
@@ -44,7 +54,7 @@ export default function ComponentPalette({ onAddComponent, onLoadStarter }) {
           type="button"
           title="Starter topologies"
           onClick={() => setIsStarterMenuOpen((current) => !current)}
-          className="rounded-full border border-slate-700/80 bg-slate-900/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-200 shadow-xl shadow-black/30 backdrop-blur-xl transition hover:border-slate-500/80 hover:bg-slate-900/90"
+          className="w-full rounded-full border border-slate-700/80 bg-slate-900/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-200 shadow-xl shadow-black/30 backdrop-blur-xl transition hover:border-slate-500/80 hover:bg-slate-900/90"
         >
           Presets
         </button>

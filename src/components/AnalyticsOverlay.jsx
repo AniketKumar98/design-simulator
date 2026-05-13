@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, Flame, TimerReset } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { formatCompactNumber } from '../lib/format';
 
 function MetricChip({ icon: Icon, label, tone = 'default', value }) {
@@ -25,14 +25,10 @@ export default function AnalyticsOverlay({ analytics, isRunning }) {
   const alerts = analytics.alerts ?? [];
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
 
-  useEffect(() => {
-    setIsAlertsOpen(alerts.length > 0);
-  }, [alerts.length]);
-
   return (
-    <div className="pointer-events-auto absolute bottom-6 left-1/2 z-50 -translate-x-1/2">
+    <>
       {alerts.length > 0 && isAlertsOpen ? (
-        <div className="absolute bottom-full left-1/2 mb-3 w-[min(92vw,440px)] -translate-x-1/2 rounded-[28px] border border-slate-700/80 bg-slate-900/88 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl">
+        <div className="pointer-events-auto absolute bottom-28 right-4 z-50 w-[min(92vw,380px)] rounded-[28px] border border-slate-700/80 bg-slate-900/88 p-3 shadow-2xl shadow-black/35 backdrop-blur-xl">
           <div className="mb-2 flex items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-2 text-sm text-white">
               <AlertTriangle size={15} className="text-amber-200" />
@@ -71,43 +67,45 @@ export default function AnalyticsOverlay({ analytics, isRunning }) {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-center gap-2 rounded-[28px] border border-slate-700/80 bg-slate-900/78 px-3 py-3 shadow-2xl shadow-black/35 backdrop-blur-xl md:rounded-full">
-        <div className="flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-950/55 px-3 py-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${isRunning ? 'bg-emerald-300' : 'bg-slate-500'}`} />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-300">
-            {isRunning ? 'Live' : 'Idle'}
-          </span>
+      <div className="pointer-events-auto absolute bottom-6 left-1/2 z-50 -translate-x-1/2">
+        <div className="flex flex-wrap items-center justify-center gap-2 rounded-[28px] border border-slate-700/80 bg-slate-900/78 px-3 py-3 shadow-2xl shadow-black/35 backdrop-blur-xl md:rounded-full">
+          <div className="flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-950/55 px-3 py-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${isRunning ? 'bg-emerald-300' : 'bg-slate-500'}`} />
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-300">
+              {isRunning ? 'Live' : 'Idle'}
+            </span>
+          </div>
+
+          <MetricChip
+            icon={Activity}
+            label="Success"
+            value={formatCompactNumber(analytics.successTotal)}
+          />
+          <MetricChip
+            icon={Flame}
+            label="Failure"
+            tone="danger"
+            value={formatCompactNumber(analytics.failureTotal)}
+          />
+          <MetricChip
+            icon={TimerReset}
+            label="Latency"
+            tone="amber"
+            value={`${formatCompactNumber(analytics.avgLatencyMs)} ms`}
+          />
+
+          {alerts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsAlertsOpen((current) => !current)}
+              className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-200/35 hover:bg-amber-300/15"
+            >
+              <AlertTriangle size={14} />
+              {alerts.length} {alerts.length === 1 ? 'Alert' : 'Alerts'}
+            </button>
+          ) : null}
         </div>
-
-        <MetricChip
-          icon={Activity}
-          label="Success"
-          value={formatCompactNumber(analytics.successTotal)}
-        />
-        <MetricChip
-          icon={Flame}
-          label="Failure"
-          tone="danger"
-          value={formatCompactNumber(analytics.failureTotal)}
-        />
-        <MetricChip
-          icon={TimerReset}
-          label="Latency"
-          tone="amber"
-          value={`${formatCompactNumber(analytics.avgLatencyMs)} ms`}
-        />
-
-        {alerts.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setIsAlertsOpen((current) => !current)}
-            className="flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-200/35 hover:bg-amber-300/15"
-          >
-            <AlertTriangle size={14} />
-            {alerts.length} {alerts.length === 1 ? 'Alert' : 'Alerts'}
-          </button>
-        ) : null}
       </div>
-    </div>
+    </>
   );
 }
